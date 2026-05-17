@@ -327,6 +327,7 @@ namespace winrt::TerminalApp::implementation
                     if (const auto tabImpl = page->_GetTabImpl(tab))
                     {
                         page->_stashed.draggedTab = tabImpl;
+                        page->_stashed.verticalTabDragTitle = tab.Title();
                         page->_stashed.verticalTabPointerDragStarted = false;
                         page->_stashed.verticalTabPointerDragStart = e.GetCurrentPoint(page->_verticalTabItemsHost).Position();
                     }
@@ -346,13 +347,24 @@ namespace winrt::TerminalApp::implementation
                     {
                         page->_stashed.draggedTab = nullptr;
                         page->_stashed.verticalTabPointerDragStarted = false;
+                        page->_HideVerticalTabDragVisual();
                         return;
                     }
 
                     const auto position = pointer.Position();
-                    if (std::abs(position.Y - page->_stashed.verticalTabPointerDragStart.Y) > 8.0)
+                    if (!page->_stashed.verticalTabPointerDragStarted &&
+                        (std::abs(position.X - page->_stashed.verticalTabPointerDragStart.X) > 8.0 ||
+                         std::abs(position.Y - page->_stashed.verticalTabPointerDragStart.Y) > 8.0))
                     {
                         page->_stashed.verticalTabPointerDragStarted = true;
+                        const auto rootPosition = e.GetCurrentPoint(page->Root()).Position();
+                        page->_ShowVerticalTabDragVisual(rootPosition);
+                        e.Handled(true);
+                    }
+                    else if (page->_stashed.verticalTabPointerDragStarted)
+                    {
+                        const auto rootPosition = e.GetCurrentPoint(page->Root()).Position();
+                        page->_UpdateVerticalTabDragVisual(rootPosition);
                         e.Handled(true);
                     }
                 }
@@ -372,10 +384,12 @@ namespace winrt::TerminalApp::implementation
                     {
                         page->_stashed.draggedTab = nullptr;
                         page->_stashed.verticalTabPointerDragStarted = false;
+                        page->_HideVerticalTabDragVisual();
                         return;
                     }
 
                     const auto position = e.GetCurrentPoint(page->_verticalTabItemsHost).Position();
+                    page->_HideVerticalTabDragVisual();
                     if (position.X < 0 ||
                         position.Y < 0 ||
                         position.X > page->_verticalTabItemsHost.ActualWidth() ||

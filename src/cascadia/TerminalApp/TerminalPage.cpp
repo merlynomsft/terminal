@@ -6169,6 +6169,84 @@ namespace winrt::TerminalApp::implementation
         return gsl::narrow_cast<int32_t>(children.Size());
     }
 
+    void TerminalPage::_ShowVerticalTabDragVisual(const winrt::Windows::Foundation::Point point)
+    {
+        if (!_verticalTabDragVisual)
+        {
+            auto text = WUX::Controls::TextBlock{};
+            text.TextTrimming(WUX::TextTrimming::CharacterEllipsis);
+            text.VerticalAlignment(WUX::VerticalAlignment::Center);
+            text.Margin({ 8, 0, 8, 0 });
+
+            auto border = WUX::Controls::Border{};
+            border.Width(240);
+            border.Height(32);
+            border.Padding({ 8, 4, 8, 4 });
+            border.CornerRadius({ 4, 4, 4, 4 });
+            border.BorderThickness({ 1, 1, 1, 1 });
+            border.Background(TitlebarBrush());
+
+            WUX::Media::SolidColorBrush borderBrush{};
+            borderBrush.Color(Windows::UI::Colors::Gray());
+            border.BorderBrush(borderBrush);
+            border.Child(text);
+            border.Opacity(0.92);
+            border.IsHitTestVisible(false);
+            border.HorizontalAlignment(WUX::HorizontalAlignment::Left);
+            border.VerticalAlignment(WUX::VerticalAlignment::Top);
+            border.Visibility(WUX::Visibility::Collapsed);
+            WUX::Automation::AutomationProperties::SetAutomationId(border, L"VerticalTabDragVisual");
+            WUX::Controls::Grid::SetColumnSpan(border, 3);
+            WUX::Controls::Grid::SetRowSpan(border, 3);
+
+            _verticalTabDragTransform = WUX::Media::TranslateTransform{};
+            border.RenderTransform(_verticalTabDragTransform);
+
+            _verticalTabDragText = text;
+            _verticalTabDragVisual = border;
+            Root().Children().Append(border);
+        }
+
+        if (_verticalTabDragText)
+        {
+            _verticalTabDragText.Text(_stashed.verticalTabDragTitle);
+            WUX::Automation::AutomationProperties::SetName(_verticalTabDragVisual, _stashed.verticalTabDragTitle);
+        }
+
+        _UpdateVerticalTabDragVisual(point);
+        _verticalTabDragVisual.Visibility(WUX::Visibility::Visible);
+
+        const auto coreWindow = CoreWindow::GetForCurrentThread();
+        if (!_verticalTabDragOriginalCursor)
+        {
+            _verticalTabDragOriginalCursor = coreWindow.PointerCursor();
+        }
+        coreWindow.PointerCursor(CoreCursor{ CoreCursorType::SizeAll, 0 });
+    }
+
+    void TerminalPage::_UpdateVerticalTabDragVisual(const winrt::Windows::Foundation::Point point)
+    {
+        if (_verticalTabDragTransform)
+        {
+            _verticalTabDragTransform.X(point.X + 12);
+            _verticalTabDragTransform.Y(point.Y + 12);
+        }
+    }
+
+    void TerminalPage::_HideVerticalTabDragVisual()
+    {
+        if (_verticalTabDragVisual)
+        {
+            _verticalTabDragVisual.Visibility(WUX::Visibility::Collapsed);
+        }
+
+        if (_verticalTabDragOriginalCursor)
+        {
+            CoreWindow::GetForCurrentThread().PointerCursor(_verticalTabDragOriginalCursor);
+            _verticalTabDragOriginalCursor = nullptr;
+        }
+    }
+
     void TerminalPage::_RegisterVerticalTabWindow(const HWND hwnd, const uint64_t windowId)
     {
         std::lock_guard lock{ g_verticalTabWindowIdsMutex };
