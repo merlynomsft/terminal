@@ -6128,6 +6128,21 @@ namespace winrt::TerminalApp::implementation
             return;
         }
 
+        if (const auto hostPoint = _GetCurrentPointerPointInVerticalTabHost())
+        {
+            auto targetIndex = _GetVerticalTabDropIndexAtHostPoint(hostPoint->Y);
+            if (const auto sourceIndex{ _GetTabIndex(*_stashed.draggedTab) })
+            {
+                if (*sourceIndex < gsl::narrow_cast<uint32_t>(targetIndex))
+                {
+                    targetIndex--;
+                }
+                _TryMoveTab(*sourceIndex, targetIndex);
+                _stashed.draggedTab = nullptr;
+                return;
+            }
+        }
+
         const auto& pointerPoint{ CoreWindow::GetForCurrentThread().PointerPosition() };
         const winrt::Windows::Foundation::Point adjusted = {
             pointerPoint.X - _stashed.dragOffset.X,
@@ -6170,6 +6185,10 @@ namespace winrt::TerminalApp::implementation
 
         const uint64_t src{ winrt::unbox_value<uint64_t>(windowIdObj) };
         auto targetIndex = _GetVerticalTabDropIndex(e);
+        if (const auto hostPoint = _GetCurrentPointerPointInVerticalTabHost())
+        {
+            targetIndex = _GetVerticalTabDropIndexAtHostPoint(hostPoint->Y);
+        }
 
         if (src == _WindowProperties.WindowId() && _stashed.draggedTab)
         {
@@ -6196,13 +6215,26 @@ namespace winrt::TerminalApp::implementation
             return -1;
         }
 
+        const auto cursorY{ e.GetPosition(_verticalTabItemsHost).Y };
+        return _GetVerticalTabDropIndexAtHostPoint(cursorY);
+    }
+
+    int32_t TerminalPage::_GetVerticalTabDropIndexAtHostPoint(const double cursorY) const
+    {
+        if (!_verticalTabItemsHost)
+        {
+            return -1;
+        }
+
         const auto children{ _verticalTabItemsHost.Children() };
         for (auto i = 0u; i < children.Size(); i++)
         {
             if (const auto element{ children.GetAt(i).try_as<WUX::FrameworkElement>() })
             {
-                const auto posY{ e.GetPosition(element).Y };
-                if (posY < element.ActualHeight() / 2)
+                const auto transform{ element.TransformToVisual(_verticalTabItemsHost) };
+                const auto elementTop{ transform.TransformPoint({ 0, 0 }).Y };
+                const auto elementMidpoint{ elementTop + element.ActualHeight() / 2 };
+                if (cursorY < elementMidpoint)
                 {
                     return gsl::narrow_cast<int32_t>(i);
                 }
@@ -6210,6 +6242,40 @@ namespace winrt::TerminalApp::implementation
         }
 
         return gsl::narrow_cast<int32_t>(children.Size());
+    }
+
+    std::optional<winrt::Windows::Foundation::Point> TerminalPage::_GetCurrentPointerPointInVerticalTabHost() const
+    {
+        if (!_verticalTabItemsHost)
+        {
+            return std::nullopt;
+        }
+
+        POINT cursorPos;
+        GetCursorPos(&cursorPos);
+        ScreenToClient(*_hostingHwnd, &cursorPos);
+        const auto inverseScale = 1.0f / static_cast<float>(_verticalTabItemsHost.XamlRoot().RasterizationScale());
+        const winrt::Windows::Foundation::Point rootPoint{
+            cursorPos.x * inverseScale,
+            cursorPos.y * inverseScale,
+        };
+
+        const auto transform{ _verticalTabItemsHost.TransformToVisual(nullptr) };
+        const auto hostOrigin{ transform.TransformPoint({ 0, 0 }) };
+        const auto hostPoint = winrt::Windows::Foundation::Point{
+            rootPoint.X - hostOrigin.X,
+            rootPoint.Y - hostOrigin.Y,
+        };
+
+        if (hostPoint.X < 0 ||
+            hostPoint.Y < 0 ||
+            hostPoint.X > _verticalTabItemsHost.ActualWidth() ||
+            hostPoint.Y > _verticalTabItemsHost.ActualHeight())
+        {
+            return std::nullopt;
+        }
+
+        return hostPoint;
     }
 
     void TerminalPage::_RegisterVerticalTabWindow(const HWND hwnd, const uint64_t windowId)

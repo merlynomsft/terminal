@@ -453,9 +453,23 @@ namespace winrt::TerminalApp::implementation
             selectButton.AllowDrop(true);
             selectButton.DragOver({ get_weak(), &TerminalPage::_VerticalTabDragOver });
             selectButton.Drop({ get_weak(), &TerminalPage::_VerticalTabDrop });
+            selectButton.CanDrag(true);
+            selectButton.DragStarting([weakThis{ get_weak() }, tab](const IInspectable& sender, const WUX::DragStartingEventArgs& e) {
+                if (auto page{ weakThis.get() })
+                {
+                    if (const auto draggedElement = sender.try_as<WUX::FrameworkElement>())
+                    {
+                        page->_StartVerticalTabDrag(tab, draggedElement, e);
+                    }
+                }
+            });
+            selectButton.DropCompleted({ get_weak(), &TerminalPage::_VerticalTabDragCompleted });
             selectButton.Click([selectTab](auto&&, auto&&) {
                 selectTab();
             });
+            selectButton.AddHandler(WUX::UIElement::PointerPressedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(trackVerticalTabPointerPressed), true);
+            selectButton.AddHandler(WUX::UIElement::PointerMovedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(trackVerticalTabPointerMoved), true);
+            selectButton.AddHandler(WUX::UIElement::PointerReleasedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(completeVerticalTabPointerDrag), true);
             WUX::Controls::Grid::SetColumn(selectButton, 0);
             WUX::Controls::Grid::SetColumnSpan(selectButton, _verticalTabsExpanded ? 2 : 3);
 

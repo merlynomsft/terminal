@@ -615,6 +615,8 @@ namespace winrt::TerminalApp::implementation
         void _VerticalTabDragOver(const IInspectable& sender, const winrt::Windows::UI::Xaml::DragEventArgs& e);
         void _VerticalTabDrop(const IInspectable& sender, const winrt::Windows::UI::Xaml::DragEventArgs& e);
         int32_t _GetVerticalTabDropIndex(const winrt::Windows::UI::Xaml::DragEventArgs& e) const;
+        int32_t _GetVerticalTabDropIndexAtHostPoint(double cursorY) const;
+        std::optional<winrt::Windows::Foundation::Point> _GetCurrentPointerPointInVerticalTabHost() const;
         static void _RegisterVerticalTabWindow(const HWND hwnd, const uint64_t windowId);
         static void _UnregisterVerticalTabWindow(const HWND hwnd);
         static std::optional<uint64_t> _GetVerticalTabWindowIdFromPoint(const POINT point);
