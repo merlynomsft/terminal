@@ -5,6 +5,8 @@
 #include "pch.h"
 #include "TerminalPage.h"
 
+#include <winrt/Windows.Graphics.Imaging.h>
+
 #include <TerminalCore/ControlKeyStates.hpp>
 #include <TerminalThemeHelpers.h>
 #include <til/hash.h>
@@ -6050,14 +6052,14 @@ namespace winrt::TerminalApp::implementation
         }
     }
 
-    void TerminalPage::_StartVerticalTabDrag(const winrt::TerminalApp::Tab& tab,
-                                             const WUX::FrameworkElement& draggedElement,
-                                             const WUX::DragStartingEventArgs& e)
+    safe_void_coroutine TerminalPage::_StartVerticalTabDrag(const winrt::TerminalApp::Tab& tab,
+                                                            WUX::FrameworkElement draggedElement,
+                                                            WUX::DragStartingEventArgs e)
     {
         const auto tabImpl = _GetTabImpl(tab);
         if (!tabImpl)
         {
-            return;
+            co_return;
         }
 
         _stashed.draggedTab = tabImpl;
@@ -6073,8 +6075,37 @@ namespace winrt::TerminalApp::implementation
         const auto pid{ GetCurrentProcessId() };
         e.Data().Properties().Insert(L"windowId", winrt::box_value(id));
         e.Data().Properties().Insert(L"pid", winrt::box_value<uint32_t>(pid));
-        e.Data().SetText(tab.Title());
         e.Data().RequestedOperation(DataPackageOperation::Move);
+
+        const auto deferral = e.GetDeferral();
+        auto completeDeferral = wil::scope_exit([&]() {
+            deferral.Complete();
+        });
+
+        const auto rowBorder = draggedElement.try_as<WUX::Controls::Border>();
+        WUX::Media::Brush originalBackground{ nullptr };
+        if (rowBorder)
+        {
+            originalBackground = rowBorder.Background();
+            rowBorder.Background(TitlebarBrush());
+        }
+        auto restoreBackground = wil::scope_exit([&]() {
+            if (rowBorder)
+            {
+                rowBorder.Background(originalBackground);
+            }
+        });
+
+        const auto bitmap = WUX::Media::Imaging::RenderTargetBitmap{};
+        co_await bitmap.RenderAsync(draggedElement);
+        const auto pixels = co_await bitmap.GetPixelsAsync();
+        const auto dragImage = Windows::Graphics::Imaging::SoftwareBitmap::CreateCopyFromBuffer(
+            pixels,
+            Windows::Graphics::Imaging::BitmapPixelFormat::Bgra8,
+            bitmap.PixelWidth(),
+            bitmap.PixelHeight(),
+            Windows::Graphics::Imaging::BitmapAlphaMode::Premultiplied);
+        e.DragUI().SetContentFromSoftwareBitmap(dragImage, e.GetPosition(draggedElement));
     }
 
     safe_void_coroutine TerminalPage::_StartVerticalTabSystemDrag(WUX::UIElement source,

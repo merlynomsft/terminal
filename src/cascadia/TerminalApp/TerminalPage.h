@@ -609,7 +609,7 @@ namespace winrt::TerminalApp::implementation
         void _VerticalTabsSplitterPointerPressed(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);
         void _VerticalTabsSplitterPointerMoved(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);
         void _VerticalTabsSplitterPointerReleased(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);
-        void _StartVerticalTabDrag(const winrt::TerminalApp::Tab& tab, const winrt::Windows::UI::Xaml::FrameworkElement& draggedElement, const winrt::Windows::UI::Xaml::DragStartingEventArgs& e);
+        safe_void_coroutine _StartVerticalTabDrag(const winrt::TerminalApp::Tab& tab, winrt::Windows::UI::Xaml::FrameworkElement draggedElement, winrt::Windows::UI::Xaml::DragStartingEventArgs e);
         safe_void_coroutine _StartVerticalTabSystemDrag(winrt::Windows::UI::Xaml::UIElement source, winrt::Windows::UI::Input::PointerPoint pointerPoint);
         void _VerticalTabDragCompleted(const IInspectable& sender, const winrt::Windows::UI::Xaml::DropCompletedEventArgs& e);
         void _VerticalTabDragOver(const IInspectable& sender, const winrt::Windows::UI::Xaml::DragEventArgs& e);
