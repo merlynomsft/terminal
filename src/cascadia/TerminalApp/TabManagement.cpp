@@ -311,10 +311,143 @@ namespace winrt::TerminalApp::implementation
             WUX::Media::SolidColorBrush transparentBrush{};
             transparentBrush.Color(Windows::UI::Colors::Transparent());
 
+            const auto trackVerticalTabPointerPressed = [weakThis{ get_weak() }, tab](const IInspectable& sender, const WUX::Input::PointerRoutedEventArgs& e) {
+                if (auto page{ weakThis.get() })
+                {
+                    if (!page->_verticalTabItemsHost)
+                    {
+                        return;
+                    }
+
+                    if (const auto source = sender.try_as<WUX::UIElement>())
+                    {
+                        source.CapturePointer(e.Pointer());
+                    }
+
+                    if (const auto tabImpl = page->_GetTabImpl(tab))
+                    {
+                        page->_stashed.draggedTab = tabImpl;
+                        page->_stashed.verticalTabPointerDragStarted = false;
+                        page->_stashed.verticalTabPointerDragStart = e.GetCurrentPoint(page->_verticalTabItemsHost).Position();
+                    }
+                }
+            };
+
+            const auto trackVerticalTabPointerMoved = [weakThis{ get_weak() }](const IInspectable&, const WUX::Input::PointerRoutedEventArgs& e) {
+                if (auto page{ weakThis.get() })
+                {
+                    if (!page->_stashed.draggedTab || !page->_verticalTabItemsHost)
+                    {
+                        return;
+                    }
+
+                    const auto pointer = e.GetCurrentPoint(page->_verticalTabItemsHost);
+                    if (!pointer.Properties().IsLeftButtonPressed())
+                    {
+                        page->_stashed.draggedTab = nullptr;
+                        page->_stashed.verticalTabPointerDragStarted = false;
+                        return;
+                    }
+
+                    const auto position = pointer.Position();
+                    if (std::abs(position.Y - page->_stashed.verticalTabPointerDragStart.Y) > 8.0)
+                    {
+                        page->_stashed.verticalTabPointerDragStarted = true;
+                        e.Handled(true);
+                    }
+                }
+            };
+
+            const auto completeVerticalTabPointerDrag = [weakThis{ get_weak() }](const IInspectable& sender, const WUX::Input::PointerRoutedEventArgs& e) {
+                if (const auto source = sender.try_as<WUX::UIElement>())
+                {
+                    source.ReleasePointerCapture(e.Pointer());
+                }
+
+                if (auto page{ weakThis.get() })
+                {
+                    const auto draggedTab = page->_stashed.draggedTab;
+                    const auto dragStarted = page->_stashed.verticalTabPointerDragStarted;
+                    if (!draggedTab || !dragStarted || !page->_verticalTabItemsHost)
+                    {
+                        page->_stashed.draggedTab = nullptr;
+                        page->_stashed.verticalTabPointerDragStarted = false;
+                        return;
+                    }
+
+                    const auto position = e.GetCurrentPoint(page->_verticalTabItemsHost).Position();
+                    if (position.X < 0 ||
+                        position.Y < 0 ||
+                        position.X > page->_verticalTabItemsHost.ActualWidth() ||
+                        position.Y > page->_verticalTabItemsHost.ActualHeight())
+                    {
+                        POINT screenPoint{};
+                        GetCursorPos(&screenPoint);
+                        const auto targetWindowId = TerminalPage::_GetVerticalTabWindowIdFromPoint(screenPoint);
+                        if (targetWindowId.has_value() && targetWindowId.value() != page->_WindowProperties.WindowId())
+                        {
+                            page->_sendDraggedTabToWindow(winrt::to_hstring(targetWindowId.value()), 0, std::nullopt);
+                        }
+                        else
+                        {
+                            const auto pointerPoint = CoreWindow::GetForCurrentThread().PointerPosition();
+                            page->_sendDraggedTabToWindow(winrt::hstring{ L"-1" }, 0, pointerPoint);
+                        }
+                        page->_stashed.verticalTabPointerDragStarted = false;
+                        e.Handled(true);
+                        return;
+                    }
+
+                    auto targetIndex = gsl::narrow_cast<int32_t>(page->_verticalTabItemsHost.Children().Size());
+                    const auto children = page->_verticalTabItemsHost.Children();
+                    for (auto i = 0u; i < children.Size(); i++)
+                    {
+                        if (const auto element = children.GetAt(i).try_as<WUX::FrameworkElement>())
+                        {
+                            const auto top = element.TransformToVisual(page->_verticalTabItemsHost).TransformPoint({ 0, 0 }).Y;
+                            if (position.Y < top + element.ActualHeight() / 2)
+                            {
+                                targetIndex = gsl::narrow_cast<int32_t>(i);
+                                break;
+                            }
+                        }
+                    }
+
+                    if (const auto sourceIndex = page->_GetTabIndex(*draggedTab))
+                    {
+                        if (*sourceIndex < gsl::narrow_cast<uint32_t>(targetIndex))
+                        {
+                            targetIndex--;
+                        }
+                        page->_TryMoveTab(*sourceIndex, targetIndex);
+                        e.Handled(true);
+                    }
+                    page->_stashed.draggedTab = nullptr;
+                    page->_stashed.verticalTabPointerDragStarted = false;
+                }
+            };
+
             auto rowBorder = WUX::Controls::Border{};
             rowBorder.Margin({ 0, 0, 0, 4 });
             rowBorder.Padding({ 8, 6, 8, 6 });
             rowBorder.Background(tab == focusedTab ? tab.TabViewItem().Background() : transparentBrush);
+            rowBorder.AllowDrop(true);
+            rowBorder.DragOver({ get_weak(), &TerminalPage::_VerticalTabDragOver });
+            rowBorder.Drop({ get_weak(), &TerminalPage::_VerticalTabDrop });
+            rowBorder.CanDrag(true);
+            rowBorder.DragStarting([weakThis{ get_weak() }, tab](const IInspectable& sender, const WUX::DragStartingEventArgs& e) {
+                if (auto page{ weakThis.get() })
+                {
+                    if (const auto draggedElement = sender.try_as<WUX::FrameworkElement>())
+                    {
+                        page->_StartVerticalTabDrag(tab, draggedElement, e);
+                    }
+                }
+            });
+            rowBorder.DropCompleted({ get_weak(), &TerminalPage::_VerticalTabDragCompleted });
+            rowBorder.AddHandler(WUX::UIElement::PointerPressedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(trackVerticalTabPointerPressed), true);
+            rowBorder.AddHandler(WUX::UIElement::PointerMovedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(trackVerticalTabPointerMoved), true);
+            rowBorder.AddHandler(WUX::UIElement::PointerReleasedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(completeVerticalTabPointerDrag), true);
 
             const auto showContextMenu = [tab](const IInspectable& sender, const WUX::Input::RightTappedRoutedEventArgs& e) {
                 if (const auto flyout = tab.TabViewItem().ContextFlyout())
@@ -359,6 +492,23 @@ namespace winrt::TerminalApp::implementation
             selectButton.HorizontalContentAlignment(HorizontalAlignment::Stretch);
             selectButton.VerticalAlignment(VerticalAlignment::Center);
             selectButton.RightTapped(showContextMenu);
+            selectButton.AllowDrop(true);
+            selectButton.DragOver({ get_weak(), &TerminalPage::_VerticalTabDragOver });
+            selectButton.Drop({ get_weak(), &TerminalPage::_VerticalTabDrop });
+            selectButton.CanDrag(true);
+            selectButton.DragStarting([weakThis{ get_weak() }, tab](const IInspectable& sender, const WUX::DragStartingEventArgs& e) {
+                if (auto page{ weakThis.get() })
+                {
+                    if (const auto draggedElement = sender.try_as<WUX::FrameworkElement>())
+                    {
+                        page->_StartVerticalTabDrag(tab, draggedElement, e);
+                    }
+                }
+            });
+            selectButton.DropCompleted({ get_weak(), &TerminalPage::_VerticalTabDragCompleted });
+            selectButton.AddHandler(WUX::UIElement::PointerPressedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(trackVerticalTabPointerPressed), true);
+            selectButton.AddHandler(WUX::UIElement::PointerMovedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(trackVerticalTabPointerMoved), true);
+            selectButton.AddHandler(WUX::UIElement::PointerReleasedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(completeVerticalTabPointerDrag), true);
             selectButton.Click([selectTab](auto&&, auto&&) {
                 selectTab();
             });

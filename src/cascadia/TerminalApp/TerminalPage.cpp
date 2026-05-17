@@ -213,6 +213,12 @@ namespace clipboard
     }
 } // namespace clipboard
 
+namespace
+{
+    std::unordered_map<HWND, uint64_t> g_verticalTabWindowIds;
+    std::mutex g_verticalTabWindowIdsMutex;
+}
+
 namespace winrt::TerminalApp::implementation
 {
     TerminalPage::TerminalPage(TerminalApp::WindowProperties properties, const TerminalApp::ContentManager& manager) :
@@ -224,6 +230,14 @@ namespace winrt::TerminalApp::implementation
     {
         InitializeComponent();
         _WindowProperties.PropertyChanged({ get_weak(), &TerminalPage::_windowPropertyChanged });
+    }
+
+    TerminalPage::~TerminalPage()
+    {
+        if (_hostingHwnd)
+        {
+            _UnregisterVerticalTabWindow(*_hostingHwnd);
+        }
     }
 
     // Method Description:
@@ -261,6 +275,7 @@ namespace winrt::TerminalApp::implementation
         }
 
         _hostingHwnd = hwnd;
+        _RegisterVerticalTabWindow(hwnd, _WindowProperties.WindowId());
         return S_OK;
     }
 
@@ -334,6 +349,21 @@ namespace winrt::TerminalApp::implementation
         _verticalTabPinButton = this->VerticalTabPinButton();
         _titlebarPlaceholder = WUX::Controls::Grid{};
         _showVerticalTabs = _settings.GlobalSettings().VerticalTabs();
+        if (_verticalTabItemsHost)
+        {
+            _verticalTabItemsHost.AllowDrop(true);
+            WUX::Media::SolidColorBrush transparentBrush{};
+            transparentBrush.Color(Windows::UI::Colors::Transparent());
+            _verticalTabItemsHost.Background(transparentBrush);
+            _verticalTabItemsHost.DragOver({ this, &TerminalPage::_VerticalTabDragOver });
+            _verticalTabItemsHost.Drop({ this, &TerminalPage::_VerticalTabDrop });
+        }
+        if (_verticalTabsPane)
+        {
+            _verticalTabsPane.AllowDrop(true);
+            _verticalTabsPane.DragOver({ this, &TerminalPage::_VerticalTabDragOver });
+            _verticalTabsPane.Drop({ this, &TerminalPage::_VerticalTabDrop });
+        }
         _rearranging = false;
 
         const auto canDragDrop = CanDragDrop();
@@ -6018,6 +6048,164 @@ namespace winrt::TerminalApp::implementation
         {
             IdentifyWindow();
         }
+    }
+
+    void TerminalPage::_StartVerticalTabDrag(const winrt::TerminalApp::Tab& tab,
+                                             const WUX::FrameworkElement& draggedElement,
+                                             const WUX::DragStartingEventArgs& e)
+    {
+        const auto tabImpl = _GetTabImpl(tab);
+        if (!tabImpl)
+        {
+            return;
+        }
+
+        _stashed.draggedTab = tabImpl;
+
+        const auto inverseScale = 1.0f / static_cast<float>(draggedElement.XamlRoot().RasterizationScale());
+        POINT cursorPos;
+        GetCursorPos(&cursorPos);
+        ScreenToClient(*_hostingHwnd, &cursorPos);
+        _stashed.dragOffset.X = cursorPos.x * inverseScale;
+        _stashed.dragOffset.Y = cursorPos.y * inverseScale;
+
+        const auto id{ _WindowProperties.WindowId() };
+        const auto pid{ GetCurrentProcessId() };
+        e.Data().Properties().Insert(L"windowId", winrt::box_value(id));
+        e.Data().Properties().Insert(L"pid", winrt::box_value<uint32_t>(pid));
+        e.Data().SetText(tab.Title());
+        e.Data().RequestedOperation(DataPackageOperation::Move);
+    }
+
+    void TerminalPage::_VerticalTabDragCompleted(const IInspectable&,
+                                                 const WUX::DropCompletedEventArgs& e)
+    {
+        if (!_stashed.draggedTab || e.DropResult() == DataPackageOperation::Move)
+        {
+            return;
+        }
+
+        const auto& pointerPoint{ CoreWindow::GetForCurrentThread().PointerPosition() };
+        const winrt::Windows::Foundation::Point adjusted = {
+            pointerPoint.X - _stashed.dragOffset.X,
+            pointerPoint.Y - _stashed.dragOffset.Y,
+        };
+        _sendDraggedTabToWindow(winrt::hstring{ L"-1" }, 0, adjusted);
+    }
+
+    void TerminalPage::_VerticalTabDragOver(const IInspectable&,
+                                            const WUX::DragEventArgs& e)
+    {
+        const auto& props{ e.DataView().Properties() };
+        if (props.HasKey(L"windowId") &&
+            props.HasKey(L"pid") &&
+            (winrt::unbox_value_or<uint32_t>(props.TryLookup(L"pid"), 0u) == GetCurrentProcessId()))
+        {
+            e.AcceptedOperation(DataPackageOperation::Move);
+            e.Handled(true);
+        }
+    }
+
+    void TerminalPage::_VerticalTabDrop(const IInspectable&,
+                                        const WUX::DragEventArgs& e)
+    {
+        const auto& props{ e.DataView().Properties() };
+        const auto pidObj{ props.TryLookup(L"pid") };
+        if (!pidObj || winrt::unbox_value_or<uint32_t>(pidObj, 0u) != GetCurrentProcessId())
+        {
+            return;
+        }
+
+        const auto windowIdObj{ props.TryLookup(L"windowId") };
+        if (!windowIdObj)
+        {
+            return;
+        }
+
+        e.AcceptedOperation(DataPackageOperation::Move);
+        e.Handled(true);
+
+        const uint64_t src{ winrt::unbox_value<uint64_t>(windowIdObj) };
+        auto targetIndex = _GetVerticalTabDropIndex(e);
+
+        if (src == _WindowProperties.WindowId() && _stashed.draggedTab)
+        {
+            if (const auto sourceIndex{ _GetTabIndex(*_stashed.draggedTab) })
+            {
+                if (*sourceIndex < gsl::narrow_cast<uint32_t>(targetIndex))
+                {
+                    targetIndex--;
+                }
+                _TryMoveTab(*sourceIndex, targetIndex);
+            }
+            _stashed.draggedTab = nullptr;
+            return;
+        }
+
+        const auto request = winrt::make_self<RequestReceiveContentArgs>(src, _WindowProperties.WindowId(), targetIndex);
+        RequestReceiveContent.raise(*this, *request);
+    }
+
+    int32_t TerminalPage::_GetVerticalTabDropIndex(const WUX::DragEventArgs& e) const
+    {
+        if (!_verticalTabItemsHost)
+        {
+            return -1;
+        }
+
+        const auto children{ _verticalTabItemsHost.Children() };
+        for (auto i = 0u; i < children.Size(); i++)
+        {
+            if (const auto element{ children.GetAt(i).try_as<WUX::FrameworkElement>() })
+            {
+                const auto posY{ e.GetPosition(element).Y };
+                if (posY < element.ActualHeight() / 2)
+                {
+                    return gsl::narrow_cast<int32_t>(i);
+                }
+            }
+        }
+
+        return gsl::narrow_cast<int32_t>(children.Size());
+    }
+
+    void TerminalPage::_RegisterVerticalTabWindow(const HWND hwnd, const uint64_t windowId)
+    {
+        std::lock_guard lock{ g_verticalTabWindowIdsMutex };
+        g_verticalTabWindowIds[hwnd] = windowId;
+        if (const auto rootHwnd = GetAncestor(hwnd, GA_ROOT))
+        {
+            g_verticalTabWindowIds[rootHwnd] = windowId;
+        }
+    }
+
+    void TerminalPage::_UnregisterVerticalTabWindow(const HWND hwnd)
+    {
+        std::lock_guard lock{ g_verticalTabWindowIdsMutex };
+        g_verticalTabWindowIds.erase(hwnd);
+        if (const auto rootHwnd = GetAncestor(hwnd, GA_ROOT))
+        {
+            g_verticalTabWindowIds.erase(rootHwnd);
+        }
+    }
+
+    std::optional<uint64_t> TerminalPage::_GetVerticalTabWindowIdFromPoint(const POINT point)
+    {
+        const auto pointHwnd = WindowFromPoint(point);
+        if (!pointHwnd)
+        {
+            return std::nullopt;
+        }
+
+        const auto hwnd = GetAncestor(pointHwnd, GA_ROOT);
+        std::lock_guard lock{ g_verticalTabWindowIdsMutex };
+        const auto match = g_verticalTabWindowIds.find(hwnd);
+        if (match != g_verticalTabWindowIds.end())
+        {
+            return match->second;
+        }
+
+        return std::nullopt;
     }
 
     void TerminalPage::_onTabDragStarting(const winrt::Microsoft::UI::Xaml::Controls::TabView&,
