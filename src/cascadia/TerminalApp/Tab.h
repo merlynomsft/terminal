@@ -100,6 +100,8 @@ namespace winrt::TerminalApp::implementation
         }
 
         void SetDispatch(const winrt::TerminalApp::ShortcutActionDispatch& dispatch);
+        void SetSidebarHeaderControl(const winrt::TerminalApp::TabHeaderControl& control);
+        void ShowVerticalTabs(bool value);
 
         void UpdateTabViewIndex(const uint32_t idx, const uint32_t numTabs);
         void SetActionMap(const Microsoft::Terminal::Settings::Model::IActionMapView& actionMap);
@@ -112,6 +114,7 @@ namespace winrt::TerminalApp::implementation
         void CloseButtonVisibility(Microsoft::Terminal::Settings::Model::TabCloseButtonVisibility visible);
 
         til::event<winrt::delegate<void()>> RequestFocusActiveControl;
+        til::event<winrt::delegate<void()>> ToggleVerticalTabsRequested;
 
         til::event<winrt::Windows::Foundation::EventHandler<winrt::Windows::Foundation::IInspectable>> Closed;
         til::event<winrt::Windows::Foundation::EventHandler<winrt::Windows::Foundation::IInspectable>> CloseRequested;
@@ -152,6 +155,7 @@ namespace winrt::TerminalApp::implementation
         winrt::Windows::UI::Xaml::Controls::MenuFlyoutItem _closeOtherTabsMenuItem{};
         winrt::Windows::UI::Xaml::Controls::MenuFlyoutItem _closeTabsAfterMenuItem{};
         winrt::Windows::UI::Xaml::Controls::MenuFlyoutItem _closePaneMenuItem{};
+        winrt::Windows::UI::Xaml::Controls::MenuFlyoutItem _showVerticalTabsMenuItem{};
         winrt::TerminalApp::ShortcutActionDispatch _dispatch;
         Microsoft::Terminal::Settings::Model::IActionMapView _actionMap{ nullptr };
         winrt::hstring _keyChord{};
@@ -176,6 +180,10 @@ namespace winrt::TerminalApp::implementation
         winrt::event_token _colorSelectedToken;
         winrt::event_token _colorClearedToken;
         winrt::event_token _pickerClosedToken;
+        winrt::TerminalApp::TabHeaderControl _sidebarHeaderControl{ nullptr };
+        winrt::event_token _sidebarHeaderTitleChangeToken{};
+        winrt::event_token _sidebarHeaderRenameEndedToken{};
+        bool _toggleVerticalTabsWhenContextMenuCloses{ false };
 
         struct ContentEventTokens
         {
@@ -205,6 +213,7 @@ namespace winrt::TerminalApp::implementation
         bool _receivedKeyDown{ false };
         bool _iconHidden{ false };
         bool _changingActivePane{ false };
+        bool _showVerticalTabs{ false };
 
         winrt::hstring _runtimeTabText{};
         bool _inRename{ false };

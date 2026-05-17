@@ -323,6 +323,17 @@ namespace winrt::TerminalApp::implementation
         _tabContent = this->TabContent();
         _tabRow = this->TabRow();
         _tabView = _tabRow.TabView();
+        _verticalTabsPane = this->VerticalTabsPane();
+        _verticalTabsSplitter = this->VerticalTabsSplitter();
+        _verticalTabItemsHost = this->VerticalTabItemsHost();
+        _verticalTabScrollViewer = this->VerticalTabScrollViewer();
+        _verticalTabColumn = this->VerticalTabColumn();
+        _verticalTabSplitterColumn = this->VerticalTabSplitterColumn();
+        _verticalNewTabButton = this->VerticalNewTabButton();
+        _verticalAddTabButton = this->VerticalAddTabButton();
+        _verticalTabPinButton = this->VerticalTabPinButton();
+        _titlebarPlaceholder = WUX::Controls::Grid{};
+        _showVerticalTabs = _settings.GlobalSettings().VerticalTabs();
         _rearranging = false;
 
         const auto canDragDrop = CanDragDrop();
@@ -334,38 +345,7 @@ namespace winrt::TerminalApp::implementation
 
         auto tabRowImpl = winrt::get_self<implementation::TabRowControl>(_tabRow);
         _newTabButton = tabRowImpl->NewTabButton();
-
-        if (_settings.GlobalSettings().ShowTabsInTitlebar())
-        {
-            // Remove the TabView from the page. We'll hang on to it, we need to
-            // put it in the titlebar.
-            uint32_t index = 0;
-            if (this->Root().Children().IndexOf(_tabRow, index))
-            {
-                this->Root().Children().RemoveAt(index);
-            }
-
-            // Inform the host that our titlebar content has changed.
-            SetTitleBarContent.raise(*this, _tabRow);
-
-            // GH#13143 Manually set the tab row's background to transparent here.
-            //
-            // We're doing it this way because ThemeResources are tricky. We
-            // default in XAML to using the appropriate ThemeResource background
-            // color for our TabRow. When tabs in the titlebar are _disabled_,
-            // this will ensure that the tab row has the correct theme-dependent
-            // value. When tabs in the titlebar are _enabled_ (the default),
-            // we'll switch the BG to Transparent, to let the Titlebar Control's
-            // background be used as the BG for the tab row.
-            //
-            // We can't do it the other way around (default to Transparent, only
-            // switch to a color when disabling tabs in the titlebar), because
-            // looking up the correct ThemeResource from and App dictionary is a
-            // capital-H Hard problem.
-            const auto transparent = Media::SolidColorBrush();
-            transparent.Color(Windows::UI::Colors::Transparent());
-            _tabRow.Background(transparent);
-        }
+        _UpdateTitlebarContent();
         _updateThemeColors();
 
         // Initialize the state of the CloseButtonOverlayMode property of
@@ -419,6 +399,8 @@ namespace winrt::TerminalApp::implementation
         _tabView.TabDroppedOutside({ this, &TerminalPage::_onTabDroppedOutside });
 
         _CreateNewTabFlyout();
+        _UpdateVerticalTabButtonGlyph();
+        _ApplyVerticalTabPaneState();
 
         _UpdateTabWidthMode();
 
@@ -453,6 +435,269 @@ namespace winrt::TerminalApp::implementation
             [=]() {
                 _adjustProcessPriority();
             });
+    }
+
+    void TerminalPage::_UpdateTitlebarContent()
+    {
+        const auto showTabsInTitlebar = _settings.GlobalSettings().ShowTabsInTitlebar();
+
+        if (showTabsInTitlebar && !_showVerticalTabs)
+        {
+            uint32_t index = 0;
+            if (this->Root().Children().IndexOf(_tabRow, index))
+            {
+                this->Root().Children().RemoveAt(index);
+            }
+
+            SetTitleBarContent.raise(*this, _tabRow);
+
+            const auto transparent = Media::SolidColorBrush();
+            transparent.Color(Windows::UI::Colors::Transparent());
+            _tabRow.Background(transparent);
+        }
+        else
+        {
+            // Release the tab row from the titlebar host before putting it back
+            // into the page visual tree. Otherwise XAML rejects the reparenting
+            // because the element still belongs to the titlebar content.
+            SetTitleBarContent.raise(*this, _titlebarPlaceholder);
+
+            uint32_t index = 0;
+            if (!this->Root().Children().IndexOf(_tabRow, index))
+            {
+                this->Root().Children().InsertAt(0, _tabRow);
+            }
+        }
+    }
+
+    bool TerminalPage::_ShouldShowVerticalTabs() const
+    {
+        return _showVerticalTabs &&
+               !_isInFocusMode &&
+               (!_isFullscreen || _showTabsFullscreen);
+    }
+
+    void TerminalPage::_UpdateVerticalTabButtonGlyph()
+    {
+        if (_verticalTabPinButton)
+        {
+            _verticalTabPinButton.Content(box_value(_verticalTabsPinned ? L"\xE840" : L"\xE76C"));
+            _verticalTabPinButton.IsChecked(_verticalTabsPinned);
+        }
+    }
+
+    void TerminalPage::_ApplyVerticalTabPaneState()
+    {
+        if (!_verticalTabsPane || !_verticalTabColumn || !_verticalTabSplitterColumn || !_verticalTabsSplitter)
+        {
+            return;
+        }
+
+        const auto visible = _ShouldShowVerticalTabs();
+        _verticalTabsPane.Visibility(visible ? Visibility::Visible : Visibility::Collapsed);
+        _verticalTabsSplitter.Visibility(visible && _verticalTabsExpanded ? Visibility::Visible : Visibility::Collapsed);
+
+        const auto width = visible ? (_verticalTabsExpanded ? _verticalTabPaneWidth : _verticalTabCollapsedWidth) : 0.0;
+        _verticalTabColumn.Width(GridLengthHelper::FromValueAndType(width, GridUnitType::Pixel));
+        _verticalTabSplitterColumn.Width(GridLengthHelper::FromValueAndType(visible && _verticalTabsExpanded ? 4.0 : 0.0, GridUnitType::Pixel));
+
+        if (_verticalNewTabButton)
+        {
+            _verticalNewTabButton.Visibility(visible && _verticalTabsExpanded ? Visibility::Visible : Visibility::Collapsed);
+        }
+
+        if (_verticalAddTabButton)
+        {
+            _verticalAddTabButton.HorizontalContentAlignment(_verticalTabsExpanded ? HorizontalAlignment::Center : HorizontalAlignment::Stretch);
+        }
+
+        _UpdateVerticalTabButtonGlyph();
+        _RefreshVerticalTabsPane();
+    }
+
+    void TerminalPage::_SetVerticalTabs(bool enabled)
+    {
+        if (_showVerticalTabs == enabled)
+        {
+            return;
+        }
+
+        _showVerticalTabs = enabled;
+
+        TraceLoggingWrite(
+            g_hTerminalAppProvider,
+            "VerticalTabsToggled",
+            TraceLoggingBoolean(enabled, "Enabled"),
+            TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
+            TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage));
+
+        for (const auto& tab : _tabs)
+        {
+            if (auto tabImpl = _GetTabImpl(tab))
+            {
+                tabImpl->ShowVerticalTabs(enabled);
+            }
+        }
+
+        _UpdateTitlebarContent();
+        _UpdateTabView();
+        _CreateNewTabFlyout();
+    }
+
+    void TerminalPage::_ToggleVerticalTabs()
+    {
+        _SetVerticalTabs(!_showVerticalTabs);
+    }
+
+    safe_void_coroutine TerminalPage::_ToggleVerticalTabsAfterContextMenuDismissed()
+    {
+        const auto weakThis{ get_weak() };
+        const auto dispatcher{ Dispatcher() };
+        co_await winrt::resume_after(750ms);
+        co_await wil::resume_foreground(dispatcher, CoreDispatcherPriority::Low);
+
+        if (auto page{ weakThis.get() })
+        {
+            page->_ToggleVerticalTabs();
+        }
+    }
+
+    void TerminalPage::_VerticalNewTabButtonClick(const IInspectable&, const winrt::Microsoft::UI::Xaml::Controls::SplitButtonClickEventArgs&)
+    {
+        _OpenNewTerminalViaDropdown(NewTerminalArgs());
+    }
+
+    void TerminalPage::_VerticalNewTabButtonDrop(const IInspectable&, const winrt::Windows::UI::Xaml::DragEventArgs& e)
+    {
+        _NewTerminalByDrop(nullptr, e);
+    }
+
+    void TerminalPage::_VerticalNewTabButtonDragOver(const IInspectable&, const winrt::Windows::UI::Xaml::DragEventArgs& e)
+    {
+        if (!e.DataView().Contains(StandardDataFormats::StorageItems()))
+        {
+            return;
+        }
+
+        e.AcceptedOperation(DataPackageOperation::Copy);
+
+        const auto modifiers = static_cast<uint32_t>(e.Modifiers());
+        if (WI_IsFlagSet(modifiers, static_cast<uint32_t>(DragDrop::DragDropModifiers::Alt)))
+        {
+            e.DragUIOverride().Caption(RS_(L"DropPathTabSplit/Text"));
+        }
+        else if (WI_IsFlagSet(modifiers, static_cast<uint32_t>(DragDrop::DragDropModifiers::Shift)))
+        {
+            e.DragUIOverride().Caption(RS_(L"DropPathTabNewWindow/Text"));
+        }
+        else
+        {
+            e.DragUIOverride().Caption(RS_(L"DropPathTabRun/Text"));
+        }
+
+        e.DragUIOverride().IsCaptionVisible(true);
+        e.DragUIOverride().IsContentVisible(false);
+        e.DragUIOverride().IsGlyphVisible(false);
+    }
+
+    void TerminalPage::_VerticalAddTabButtonClick(const IInspectable&, const winrt::Windows::UI::Xaml::RoutedEventArgs&)
+    {
+        _OpenNewTerminalViaDropdown(NewTerminalArgs());
+    }
+
+    void TerminalPage::_VerticalTabPinButtonClick(const IInspectable&, const winrt::Windows::UI::Xaml::RoutedEventArgs&)
+    {
+        _verticalTabsPinned = !_verticalTabsPinned;
+        _verticalTabsExpanded = _verticalTabsPinned;
+
+        TraceLoggingWrite(
+            g_hTerminalAppProvider,
+            "VerticalTabsPinToggled",
+            TraceLoggingBoolean(_verticalTabsPinned, "Pinned"),
+            TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
+            TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage));
+
+        _ApplyVerticalTabPaneState();
+    }
+
+    void TerminalPage::_VerticalTabsPanePointerEntered(const IInspectable&, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs&)
+    {
+        _pointerOverVerticalTabsPane = true;
+        if (_ShouldShowVerticalTabs() && !_verticalTabsPinned && !_verticalTabsExpanded)
+        {
+            _verticalTabsExpanded = true;
+            _ApplyVerticalTabPaneState();
+        }
+    }
+
+    void TerminalPage::_VerticalTabsPanePointerExited(const IInspectable&, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs&)
+    {
+        _pointerOverVerticalTabsPane = false;
+        if (_ShouldShowVerticalTabs() && !_verticalTabsPinned && !_resizingVerticalTabs && !_pointerOverVerticalTabsSplitter)
+        {
+            _verticalTabsExpanded = false;
+            _ApplyVerticalTabPaneState();
+        }
+    }
+
+    void TerminalPage::_VerticalTabsSplitterPointerEntered(const IInspectable&, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs&)
+    {
+        _pointerOverVerticalTabsSplitter = true;
+    }
+
+    void TerminalPage::_VerticalTabsSplitterPointerExited(const IInspectable&, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs&)
+    {
+        _pointerOverVerticalTabsSplitter = false;
+        if (_ShouldShowVerticalTabs() && !_verticalTabsPinned && !_resizingVerticalTabs && !_pointerOverVerticalTabsPane)
+        {
+            _verticalTabsExpanded = false;
+            _ApplyVerticalTabPaneState();
+        }
+    }
+
+    void TerminalPage::_VerticalTabsSplitterPointerPressed(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e)
+    {
+        if (_ShouldShowVerticalTabs() && _verticalTabsExpanded)
+        {
+            const auto splitter = sender.as<WUX::Controls::Grid>();
+            if (splitter.CapturePointer(e.Pointer()))
+            {
+                _resizingVerticalTabs = true;
+                _verticalTabResizeAnchor = e.GetCurrentPoint(*this).Position();
+                _verticalTabResizeStartWidth = _verticalTabPaneWidth;
+                e.Handled(true);
+            }
+        }
+    }
+
+    void TerminalPage::_VerticalTabsSplitterPointerMoved(const IInspectable&, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e)
+    {
+        if (_resizingVerticalTabs)
+        {
+            const auto current = e.GetCurrentPoint(*this).Position();
+            const auto delta = current.X - _verticalTabResizeAnchor.X;
+            const auto maxWidth = std::max(_verticalTabMinWidth, static_cast<double>(ActualWidth()) * 0.5);
+            _verticalTabPaneWidth = std::clamp(_verticalTabResizeStartWidth + delta, _verticalTabMinWidth, maxWidth);
+            _ApplyVerticalTabPaneState();
+            e.Handled(true);
+        }
+    }
+
+    void TerminalPage::_VerticalTabsSplitterPointerReleased(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e)
+    {
+        if (_resizingVerticalTabs)
+        {
+            sender.as<WUX::Controls::Grid>().ReleasePointerCapture(e.Pointer());
+            _resizingVerticalTabs = false;
+
+            if (!_verticalTabsPinned && !_pointerOverVerticalTabsPane && !_pointerOverVerticalTabsSplitter)
+            {
+                _verticalTabsExpanded = false;
+                _ApplyVerticalTabPaneState();
+            }
+
+            e.Handled(true);
+        }
     }
 
     Windows::UI::Xaml::Automation::Peers::AutomationPeer TerminalPage::OnCreateAutomationPeer()
@@ -1010,6 +1255,19 @@ namespace winrt::TerminalApp::implementation
             newTabFlyout.Items().Append(item);
         }
 
+        auto verticalTabsItem = WUX::Controls::MenuFlyoutItem{};
+        verticalTabsItem.Text(_showVerticalTabs ? RS_(L"TurnOffVerticalTabsText") : RS_(L"TurnOnVerticalTabsText"));
+        Automation::AutomationProperties::SetAutomationId(verticalTabsItem, L"ToggleVerticalTabsMenuItem");
+        Automation::AutomationProperties::SetHelpText(verticalTabsItem, RS_(L"ShowVerticalTabsText"));
+
+        WUX::Controls::FontIcon verticalTabsIcon{};
+        verticalTabsIcon.Glyph(L"\xE8B1");
+        verticalTabsIcon.FontFamily(Media::FontFamily{ L"Segoe Fluent Icons, Segoe MDL2 Assets" });
+        verticalTabsItem.Icon(verticalTabsIcon);
+
+        verticalTabsItem.Click({ this, &TerminalPage::_VerticalTabsMenuItemOnClick });
+        newTabFlyout.Items().Append(verticalTabsItem);
+
         // add menu separator
         auto separatorItem = WUX::Controls::MenuFlyoutSeparator{};
         newTabFlyout.Items().Append(separatorItem);
@@ -1116,7 +1374,17 @@ namespace winrt::TerminalApp::implementation
                     TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage));
             }
         });
-        _newTabButton.Flyout(newTabFlyout);
+        _SetNewTabButtonFlyout(_newTabButton, newTabFlyout);
+        _SetNewTabButtonFlyout(_verticalNewTabButton, newTabFlyout);
+    }
+
+    void TerminalPage::_SetNewTabButtonFlyout(winrt::Microsoft::UI::Xaml::Controls::SplitButton button,
+                                              const winrt::Windows::UI::Xaml::Controls::MenuFlyout& flyout)
+    {
+        if (button)
+        {
+            button.Flyout(flyout);
+        }
     }
 
     // Method Description:
@@ -1411,7 +1679,8 @@ namespace winrt::TerminalApp::implementation
     // Shows the dropdown flyout.
     void TerminalPage::_OpenNewTabDropdown()
     {
-        _newTabButton.Flyout().ShowAt(_newTabButton);
+        auto button = (_showVerticalTabs && _verticalNewTabButton) ? _verticalNewTabButton : _newTabButton;
+        button.Flyout().ShowAt(button);
     }
 
     void TerminalPage::_OpenNewTerminalViaDropdown(const NewTerminalArgs newTerminalArgs)
@@ -1771,6 +2040,12 @@ namespace winrt::TerminalApp::implementation
             TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage));
     }
 
+    void TerminalPage::_VerticalTabsMenuItemOnClick(const IInspectable&,
+                                                    const RoutedEventArgs&)
+    {
+        (void)_ToggleVerticalTabsAfterContextMenuDismissed();
+    }
+
     // Method Description:
     // - Called when the users pressed keyBindings while CommandPaletteElement is open.
     // - As of GH#8480, this is also bound to the TabRowControl's KeyUp event.
@@ -2089,6 +2364,10 @@ namespace winrt::TerminalApp::implementation
                 {
                     page->_UpdateTitle(*tab);
                 }
+                else if (propertyName == L"Icon" || propertyName == L"ReadOnly")
+                {
+                    page->_RefreshVerticalTabsPane();
+                }
                 else if (propertyName == L"Content")
                 {
                     if (*tab == page->_GetFocusedTab())
@@ -2104,12 +2383,24 @@ namespace winrt::TerminalApp::implementation
                         tab->Focus(FocusState::Programmatic);
                     }
                 }
+
+                if (propertyName == L"Title")
+                {
+                    page->_RefreshVerticalTabsPane();
+                }
             }
         });
 
         // Add an event handler for when the terminal or tab wants to set a
         // progress indicator on the taskbar
         hostingTab.TaskbarProgressChanged({ get_weak(), &TerminalPage::_SetTaskbarProgressHandler });
+
+        hostingTab.ToggleVerticalTabsRequested([weakThis]() {
+            if (auto page{ weakThis.get() })
+            {
+                (void)page->_ToggleVerticalTabsAfterContextMenuDismissed();
+            }
+        });
 
         hostingTab.RestartTerminalRequested({ get_weak(), &TerminalPage::_restartPaneConnection });
     }
@@ -4037,6 +4328,15 @@ namespace winrt::TerminalApp::implementation
         AlwaysOnTopChanged.raise(*this, nullptr);
 
         _showTabsFullscreen = _settings.GlobalSettings().ShowTabsFullscreen();
+        _showVerticalTabs = _settings.GlobalSettings().VerticalTabs();
+        for (const auto& tab : _tabs)
+        {
+            if (auto tabImpl = _GetTabImpl(tab))
+            {
+                tabImpl->ShowVerticalTabs(_showVerticalTabs);
+            }
+        }
+        _UpdateTitlebarContent();
 
         // Settings AllowDependentAnimations will affect whether animations are
         // enabled application-wide, so we don't need to check it each time we
@@ -4056,6 +4356,7 @@ namespace winrt::TerminalApp::implementation
 
         // The user may have changed the "show title in titlebar" setting.
         TitleChanged.raise(*this, nullptr);
+        _UpdateTabView();
     }
 
     void TerminalPage::_updateAllTabCloseButtons()
@@ -4286,28 +4587,28 @@ namespace winrt::TerminalApp::implementation
         Media::SolidColorBrush backgroundPressedBrush{ pressedColor };
         Media::SolidColorBrush foregroundBrush{ foregroundColor };
 
-        _newTabButton.Resources().Insert(winrt::box_value(L"SplitButtonBackground"), backgroundBrush);
-        _newTabButton.Resources().Insert(winrt::box_value(L"SplitButtonBackgroundPointerOver"), backgroundHoverBrush);
-        _newTabButton.Resources().Insert(winrt::box_value(L"SplitButtonBackgroundPressed"), backgroundPressedBrush);
+        const auto applyButtonColors = [&](const auto& button) {
+            if (!button)
+            {
+                return;
+            }
 
-        // Load bearing: The SplitButton uses SplitButtonForegroundSecondary for
-        // the secondary button, but {TemplateBinding Foreground} for the
-        // primary button.
-        _newTabButton.Resources().Insert(winrt::box_value(L"SplitButtonForeground"), foregroundBrush);
-        _newTabButton.Resources().Insert(winrt::box_value(L"SplitButtonForegroundPointerOver"), foregroundBrush);
-        _newTabButton.Resources().Insert(winrt::box_value(L"SplitButtonForegroundPressed"), foregroundBrush);
-        _newTabButton.Resources().Insert(winrt::box_value(L"SplitButtonForegroundSecondary"), foregroundBrush);
-        _newTabButton.Resources().Insert(winrt::box_value(L"SplitButtonForegroundSecondaryPressed"), foregroundBrush);
+            button.Resources().Insert(winrt::box_value(L"SplitButtonBackground"), backgroundBrush);
+            button.Resources().Insert(winrt::box_value(L"SplitButtonBackgroundPointerOver"), backgroundHoverBrush);
+            button.Resources().Insert(winrt::box_value(L"SplitButtonBackgroundPressed"), backgroundPressedBrush);
+            button.Resources().Insert(winrt::box_value(L"SplitButtonForeground"), foregroundBrush);
+            button.Resources().Insert(winrt::box_value(L"SplitButtonForegroundPointerOver"), foregroundBrush);
+            button.Resources().Insert(winrt::box_value(L"SplitButtonForegroundPressed"), foregroundBrush);
+            button.Resources().Insert(winrt::box_value(L"SplitButtonForegroundSecondary"), foregroundBrush);
+            button.Resources().Insert(winrt::box_value(L"SplitButtonForegroundSecondaryPressed"), foregroundBrush);
+            button.Background(backgroundBrush);
+            button.Foreground(foregroundBrush);
+            VisualStateManager::GoToState(button, L"FlyoutOpen", true);
+            VisualStateManager::GoToState(button, L"Normal", true);
+        };
 
-        _newTabButton.Background(backgroundBrush);
-        _newTabButton.Foreground(foregroundBrush);
-
-        // This is just like what we do in Tab::_RefreshVisualState. We need
-        // to manually toggle the visual state, so the setters in the visual
-        // state group will re-apply, and set our currently selected colors in
-        // the resources.
-        VisualStateManager::GoToState(_newTabButton, L"FlyoutOpen", true);
-        VisualStateManager::GoToState(_newTabButton, L"Normal", true);
+        applyButtonColors(_newTabButton);
+        applyButtonColors(_verticalNewTabButton);
     }
 
     // Method Description:
@@ -4333,15 +4634,24 @@ namespace winrt::TerminalApp::implementation
             L"SplitButtonForegroundSecondaryPressed"
         };
 
-        // simply clear any of the colors in the split button's dict
-        for (auto keyString : keys)
-        {
-            auto key = winrt::box_value(keyString);
-            if (_newTabButton.Resources().HasKey(key))
+        const auto clearButtonColors = [&](const auto& button) {
+            if (!button)
             {
-                _newTabButton.Resources().Remove(key);
+                return;
             }
-        }
+
+            for (auto keyString : keys)
+            {
+                auto key = winrt::box_value(keyString);
+                if (button.Resources().HasKey(key))
+                {
+                    button.Resources().Remove(key);
+                }
+            }
+        };
+
+        clearButtonColors(_newTabButton);
+        clearButtonColors(_verticalNewTabButton);
 
         const auto res = Application::Current().Resources();
 
@@ -4375,8 +4685,16 @@ namespace winrt::TerminalApp::implementation
             foregroundBrush = winrt::Windows::UI::Xaml::Media::SolidColorBrush{ winrt::Windows::UI::Colors::White() };
         }
 
-        _newTabButton.Background(backgroundBrush);
-        _newTabButton.Foreground(foregroundBrush);
+        if (_newTabButton)
+        {
+            _newTabButton.Background(backgroundBrush);
+            _newTabButton.Foreground(foregroundBrush);
+        }
+        if (_verticalNewTabButton)
+        {
+            _verticalNewTabButton.Background(backgroundBrush);
+            _verticalNewTabButton.Foreground(foregroundBrush);
+        }
     }
 
     // Function Description:

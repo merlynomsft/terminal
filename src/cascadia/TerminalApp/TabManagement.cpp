@@ -122,6 +122,7 @@ namespace winrt::TerminalApp::implementation
 
         newTabImpl->SetDispatch(*_actionDispatch);
         newTabImpl->SetActionMap(_settings.ActionMap());
+        newTabImpl->ShowVerticalTabs(_showVerticalTabs);
 
         // Give the tab its index in the _tabs vector so it can manage its own SwitchToTab command.
         _UpdateTabIndices();
@@ -259,18 +260,188 @@ namespace winrt::TerminalApp::implementation
                                (!_isFullscreen || _showTabsFullscreen) &&
                                (_settings.GlobalSettings().ShowTabsInTitlebar() ||
                                 (_tabs.Size() > 1) ||
-                                _settings.GlobalSettings().AlwaysShowTabs());
+                                _settings.GlobalSettings().AlwaysShowTabs() ||
+                                _showVerticalTabs);
+        const auto showHorizontalTabs = isVisible && !_showVerticalTabs;
 
         if (_tabView)
         {
-            // collapse/show the tabs themselves
+            // Keep TabView alive while vertical tabs are active. Collapsing the TabView
+            // itself during a tab context-menu transition can trip TabView/XAML debug
+            // assertions; the row height below controls whether it is visible.
             _tabView.Visibility(isVisible ? Visibility::Visible : Visibility::Collapsed);
         }
         if (_tabRow)
         {
             // collapse/show the row that the tabs are in.
             // NaN is the special value XAML uses for "Auto" sizing.
-            _tabRow.Height(isVisible ? NAN : 0);
+            _tabRow.Height(showHorizontalTabs ? NAN : 0);
+        }
+        _ApplyVerticalTabPaneState();
+    }
+
+    void TerminalPage::_RefreshVerticalTabsPane()
+    {
+        if (!_verticalTabItemsHost)
+        {
+            return;
+        }
+
+        _verticalTabItemsHost.Children().Clear();
+        for (const auto& tab : _tabs)
+        {
+            if (auto tabImpl = _GetTabImpl(tab))
+            {
+                tabImpl->SetSidebarHeaderControl(nullptr);
+            }
+        }
+
+        if (_ShouldShowVerticalTabs())
+        {
+            _UpdateVerticalTabRows();
+        }
+    }
+
+    void TerminalPage::_UpdateVerticalTabRows()
+    {
+        const auto focusedTab = _GetFocusedTab();
+
+        for (const auto& tab : _tabs)
+        {
+            WUX::Media::SolidColorBrush transparentBrush{};
+            transparentBrush.Color(Windows::UI::Colors::Transparent());
+
+            auto rowBorder = WUX::Controls::Border{};
+            rowBorder.Margin({ 0, 0, 0, 4 });
+            rowBorder.Padding({ 8, 6, 8, 6 });
+            rowBorder.Background(tab == focusedTab ? tab.TabViewItem().Background() : transparentBrush);
+
+            const auto showContextMenu = [tab](const IInspectable& sender, const WUX::Input::RightTappedRoutedEventArgs& e) {
+                if (const auto flyout = tab.TabViewItem().ContextFlyout())
+                {
+                    if (const auto target = sender.try_as<WUX::FrameworkElement>())
+                    {
+                        flyout.ShowAt(target);
+                        e.Handled(true);
+                    }
+                }
+            };
+            rowBorder.RightTapped(showContextMenu);
+
+            const auto selectTab = [weakThis{ get_weak() }, tab]() {
+                if (auto page{ weakThis.get() })
+                {
+                    page->Dispatcher().RunAsync(CoreDispatcherPriority::Normal, [weakThis{ page->get_weak() }, tab]() {
+                        if (auto page{ weakThis.get() })
+                        {
+                            page->_SelectTab(tab);
+                        }
+                    });
+                }
+            };
+
+            auto rowGrid = WUX::Controls::Grid{};
+            rowGrid.Background(transparentBrush);
+            rowGrid.ColumnDefinitions().Append(WUX::Controls::ColumnDefinition{});
+            rowGrid.ColumnDefinitions().Append(WUX::Controls::ColumnDefinition{});
+            rowGrid.ColumnDefinitions().Append(WUX::Controls::ColumnDefinition{});
+            rowGrid.ColumnDefinitions().GetAt(0).Width(GridLengthHelper::FromValueAndType(18.0, GridUnitType::Pixel));
+            rowGrid.ColumnDefinitions().GetAt(1).Width(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Star));
+            rowGrid.ColumnDefinitions().GetAt(2).Width(GridLengthHelper::FromValueAndType(0.0, GridUnitType::Auto));
+
+            auto selectButton = WUX::Controls::Button{};
+            winrt::Windows::UI::Xaml::Automation::AutomationProperties::SetAutomationId(selectButton, fmt::format(FMT_COMPILE(L"VerticalTabItem{}"), tab.TabViewIndex()));
+            winrt::Windows::UI::Xaml::Automation::AutomationProperties::SetName(selectButton, tab.Title());
+            selectButton.Background(transparentBrush);
+            selectButton.BorderThickness({ 0, 0, 0, 0 });
+            selectButton.Padding({ 0, 0, 0, 0 });
+            selectButton.HorizontalAlignment(HorizontalAlignment::Stretch);
+            selectButton.HorizontalContentAlignment(HorizontalAlignment::Stretch);
+            selectButton.VerticalAlignment(VerticalAlignment::Center);
+            selectButton.RightTapped(showContextMenu);
+            selectButton.Click([selectTab](auto&&, auto&&) {
+                selectTab();
+            });
+            WUX::Controls::Grid::SetColumn(selectButton, 0);
+            WUX::Controls::Grid::SetColumnSpan(selectButton, _verticalTabsExpanded ? 2 : 3);
+
+            auto selectButtonContent = WUX::Controls::Grid{};
+            selectButtonContent.ColumnDefinitions().Append(WUX::Controls::ColumnDefinition{});
+            selectButtonContent.ColumnDefinitions().Append(WUX::Controls::ColumnDefinition{});
+            selectButtonContent.ColumnDefinitions().GetAt(0).Width(GridLengthHelper::FromValueAndType(18.0, GridUnitType::Pixel));
+            selectButtonContent.ColumnDefinitions().GetAt(1).Width(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Star));
+
+            if (!tab.Icon().empty())
+            {
+                auto iconPresenter = WUX::Controls::ContentPresenter{};
+                iconPresenter.Content(UI::IconPathConverter::IconWUX(tab.Icon()));
+                iconPresenter.VerticalAlignment(VerticalAlignment::Center);
+                selectButtonContent.Children().Append(iconPresenter);
+            }
+            else
+            {
+                auto icon = WUX::Controls::FontIcon{};
+                icon.Glyph(L"\xE756");
+                icon.FontFamily(Media::FontFamily{ L"Segoe Fluent Icons, Segoe MDL2 Assets" });
+                icon.VerticalAlignment(VerticalAlignment::Center);
+                selectButtonContent.Children().Append(icon);
+            }
+
+            if (_verticalTabsExpanded)
+            {
+                auto header = winrt::TerminalApp::TabHeaderControl{};
+                header.VerticalAlignment(VerticalAlignment::Center);
+                header.IsHitTestVisible(false);
+                WUX::Controls::Grid::SetColumn(header, 1);
+                selectButtonContent.Children().Append(header);
+
+                if (auto tabImpl = _GetTabImpl(tab))
+                {
+                    tabImpl->SetSidebarHeaderControl(header);
+                }
+
+                auto closeButton = WUX::Controls::Button{};
+                winrt::Windows::UI::Xaml::Automation::AutomationProperties::SetAutomationId(closeButton, fmt::format(FMT_COMPILE(L"VerticalTabClose{}"), tab.TabViewIndex()));
+                closeButton.Content(box_value(L"\xE711"));
+                closeButton.FontFamily(Media::FontFamily{ L"Segoe Fluent Icons, Segoe MDL2 Assets" });
+                closeButton.FontSize(12);
+                closeButton.Padding({ 6, 0, 6, 0 });
+                closeButton.VerticalAlignment(VerticalAlignment::Center);
+                closeButton.Click([weakThis{ get_weak() }, tab](auto&&, auto&&) {
+                    if (auto page{ weakThis.get() })
+                    {
+                        page->Dispatcher().RunAsync(CoreDispatcherPriority::Normal, [weakThis{ page->get_weak() }, tab]() {
+                            if (auto page{ weakThis.get() })
+                            {
+                                page->_HandleCloseTabRequested(tab);
+                            }
+                        });
+                    }
+                });
+                WUX::Controls::Grid::SetColumn(closeButton, 2);
+                rowGrid.Children().Append(closeButton);
+            }
+            else
+            {
+                WUX::Controls::ToolTipService::SetToolTip(rowBorder, box_value(tab.Title()));
+            }
+
+            selectButton.Content(selectButtonContent);
+            rowGrid.Children().InsertAt(0, selectButton);
+            rowBorder.Child(rowGrid);
+            _verticalTabItemsHost.Children().Append(rowBorder);
+        }
+    }
+
+    void TerminalPage::_SelectTab(const winrt::TerminalApp::Tab& tab)
+    {
+        if (tab)
+        {
+            uint32_t index{};
+            if (_tabs.IndexOf(tab, index))
+            {
+                _SelectTab(index);
+            }
         }
     }
 
@@ -735,6 +906,10 @@ namespace winrt::TerminalApp::implementation
             if (_tabs.IndexOf(tab, tabIndex))
             {
                 _tabView.SelectedItem(tab.TabViewItem());
+                if (_ShouldShowVerticalTabs())
+                {
+                    _UpdatedSelectedTab(tab);
+                }
             }
         }
     }
@@ -991,6 +1166,7 @@ namespace winrt::TerminalApp::implementation
             p.Visibility(Visibility::Collapsed);
         }
         _UpdateTabView();
+        _RefreshVerticalTabsPane();
     }
 
     void TerminalPage::_OnTabPointerPressed(const IInspectable& sender, const Windows::UI::Xaml::Input::PointerRoutedEventArgs& e)
@@ -1111,6 +1287,8 @@ namespace winrt::TerminalApp::implementation
             _adjustProcessPriorityThrottled->Run();
         }
         CATCH_LOG();
+
+        _RefreshVerticalTabsPane();
     }
 
     void TerminalPage::_UpdateBackground(const winrt::Microsoft::Terminal::Settings::Model::Profile& profile)
@@ -1255,10 +1433,14 @@ namespace winrt::TerminalApp::implementation
     {
         for (const auto& tab : _tabs)
         {
-            if (tab.TabViewItem().ContextFlyout())
+            try
             {
-                tab.TabViewItem().ContextFlyout().Hide();
+                if (tab.TabViewItem().ContextFlyout())
+                {
+                    tab.TabViewItem().ContextFlyout().Hide();
+                }
             }
+            CATCH_LOG();
         }
     }
 
@@ -1267,7 +1449,9 @@ namespace winrt::TerminalApp::implementation
         // We don't want to set focus on the tab if fly-out is open as it will
         // be closed TODO GH#5400: consider checking we are not in the opening
         // state, by hooking both Opening and Open events
-        if (focusAlways || !_newTabButton.Flyout().IsOpen())
+        const auto horizontalFlyoutOpen = _newTabButton && _newTabButton.Flyout() && _newTabButton.Flyout().IsOpen();
+        const auto verticalFlyoutOpen = _verticalNewTabButton && _verticalNewTabButton.Flyout() && _verticalNewTabButton.Flyout().IsOpen();
+        if (focusAlways || (!horizontalFlyoutOpen && !verticalFlyoutOpen))
         {
             // Return focus to the active control
             if (auto tab{ _GetFocusedTab() })

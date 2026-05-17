@@ -19,6 +19,7 @@
     "alwaysShowTabs": true,
     "showTabsInTitlebar": true,
     "showTerminalTitleInTitlebar": true,
+    "verticalTabs": false,
     "tabWidthMode": "equal",
     "tabSwitcherMode": "inOrder",
     "showAdminShield": true,

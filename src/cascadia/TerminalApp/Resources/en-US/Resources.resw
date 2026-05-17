@@ -249,6 +249,15 @@
   <data name="DuplicateTabText" xml:space="preserve">
     <value>Duplicate tab</value>
   </data>
+  <data name="ShowVerticalTabsText" xml:space="preserve">
+    <value>Show vertical tabs</value>
+  </data>
+  <data name="TurnOnVerticalTabsText" xml:space="preserve">
+    <value>Turn on vertical tabs</value>
+  </data>
+  <data name="TurnOffVerticalTabsText" xml:space="preserve">
+    <value>Turn off vertical tabs</value>
+  </data>
   <data name="InvalidMediaResource" xml:space="preserve">
     <value>One or more resources (such as icon or backgroundImage) specified in your settings could not be found.</value>
     <comment>{Locked="icon","backgroundImage"} Indicates that something has gone wrong while reading a user's settings.</comment>

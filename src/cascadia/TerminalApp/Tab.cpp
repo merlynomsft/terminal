@@ -112,6 +112,41 @@ namespace winrt::TerminalApp::implementation
         TabViewItem().Header(_headerControl);
     }
 
+    void Tab::SetSidebarHeaderControl(const winrt::TerminalApp::TabHeaderControl& control)
+    {
+        ASSERT_UI_THREAD();
+
+        if (_sidebarHeaderControl)
+        {
+            _sidebarHeaderControl.TitleChangeRequested(_sidebarHeaderTitleChangeToken);
+            _sidebarHeaderControl.RenameEnded(_sidebarHeaderRenameEndedToken);
+        }
+
+        _sidebarHeaderControl = control;
+        if (!_sidebarHeaderControl)
+        {
+            return;
+        }
+
+        _sidebarHeaderControl.TabStatus(_tabStatus);
+        _sidebarHeaderControl.Title(Title());
+        _sidebarHeaderControl.RenamerMaxWidth(HeaderRenameBoxWidthTitleLength);
+
+        _sidebarHeaderTitleChangeToken = _sidebarHeaderControl.TitleChangeRequested([weakThis = get_weak()](auto&& title) {
+            if (auto tab{ weakThis.get() })
+            {
+                tab->SetTabText(title);
+            }
+        });
+
+        _sidebarHeaderRenameEndedToken = _sidebarHeaderControl.RenameEnded([weakThis = get_weak()](auto&&, auto&&) {
+            if (auto tab{ weakThis.get() })
+            {
+                tab->RequestFocusActiveControl.raise();
+            }
+        });
+    }
+
     // Method Description:
     // - Called when the timer for the bell indicator in the tab header fires
     // - Removes the bell indicator from the tab header
@@ -190,6 +225,17 @@ namespace winrt::TerminalApp::implementation
         ASSERT_UI_THREAD();
 
         _dispatch = dispatch;
+    }
+
+    void Tab::ShowVerticalTabs(bool value)
+    {
+        ASSERT_UI_THREAD();
+
+        _showVerticalTabs = value;
+        if (_showVerticalTabsMenuItem)
+        {
+            _showVerticalTabsMenuItem.Text(value ? RS_(L"TurnOffVerticalTabsText") : RS_(L"ShowVerticalTabsText"));
+        }
     }
 
     void Tab::SetActionMap(const Microsoft::Terminal::Settings::Model::IActionMapView& actionMap)
@@ -498,6 +544,10 @@ namespace winrt::TerminalApp::implementation
 
         // Update the control to reflect the changed title
         _headerControl.Title(activeTitle);
+        if (_sidebarHeaderControl)
+        {
+            _sidebarHeaderControl.Title(activeTitle);
+        }
         Automation::AutomationProperties::SetName(TabViewItem(), activeTitle);
         _UpdateToolTip();
     }
@@ -1004,7 +1054,14 @@ namespace winrt::TerminalApp::implementation
     {
         ASSERT_UI_THREAD();
 
-        _headerControl.BeginRename();
+        if (_sidebarHeaderControl)
+        {
+            _sidebarHeaderControl.BeginRename();
+        }
+        else
+        {
+            _headerControl.BeginRename();
+        }
     }
 
     // Method Description:
@@ -1777,6 +1834,21 @@ namespace winrt::TerminalApp::implementation
             Automation::AutomationProperties::SetHelpText(_restartConnectionMenuItem, restartConnectionToolTip);
         }
 
+        {
+            Controls::FontIcon verticalTabsSymbol;
+            verticalTabsSymbol.FontFamily(Media::FontFamily{ L"Segoe Fluent Icons, Segoe MDL2 Assets" });
+            verticalTabsSymbol.Glyph(L"\xE8B1");
+
+            _showVerticalTabsMenuItem.Click([weakThis](auto&&, auto&&) {
+                if (auto tab{ weakThis.get() })
+                {
+                    tab->_toggleVerticalTabsWhenContextMenuCloses = true;
+                }
+            });
+            _showVerticalTabsMenuItem.Icon(verticalTabsSymbol);
+            ShowVerticalTabs(_showVerticalTabs);
+        }
+
         // Build the menu
         Controls::MenuFlyout contextMenuFlyout;
         Controls::MenuFlyoutSeparator menuSeparator;
@@ -1788,6 +1860,7 @@ namespace winrt::TerminalApp::implementation
         contextMenuFlyout.Items().Append(_exportTabMenuItem);
         contextMenuFlyout.Items().Append(_findMenuItem);
         contextMenuFlyout.Items().Append(_restartConnectionMenuItem);
+        contextMenuFlyout.Items().Append(_showVerticalTabsMenuItem);
         contextMenuFlyout.Items().Append(menuSeparator);
 
         auto closeSubMenu = _AppendCloseMenuItems(contextMenuFlyout);
@@ -1809,6 +1882,12 @@ namespace winrt::TerminalApp::implementation
                     (terminalControl == nullptr || !terminalControl.SearchBoxEditInFocus()))
                 {
                     tab->RequestFocusActiveControl.raise();
+                }
+
+                if (tab->_toggleVerticalTabsWhenContextMenuCloses)
+                {
+                    tab->_toggleVerticalTabsWhenContextMenuCloses = false;
+                    tab->ToggleVerticalTabsRequested.raise();
                 }
             }
         });

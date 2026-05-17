@@ -237,6 +237,16 @@ namespace winrt::TerminalApp::implementation
         TerminalApp::TabRowControl _tabRow{ nullptr };
         Windows::UI::Xaml::Controls::Grid _tabContent{ nullptr };
         Microsoft::UI::Xaml::Controls::SplitButton _newTabButton{ nullptr };
+        Microsoft::UI::Xaml::Controls::SplitButton _verticalNewTabButton{ nullptr };
+        Windows::UI::Xaml::Controls::Button _verticalAddTabButton{ nullptr };
+        Windows::UI::Xaml::Controls::Primitives::ToggleButton _verticalTabPinButton{ nullptr };
+        Windows::UI::Xaml::Controls::Grid _titlebarPlaceholder{ nullptr };
+        Windows::UI::Xaml::Controls::Grid _verticalTabsPane{ nullptr };
+        Windows::UI::Xaml::Controls::Grid _verticalTabsSplitter{ nullptr };
+        Windows::UI::Xaml::Controls::StackPanel _verticalTabItemsHost{ nullptr };
+        Windows::UI::Xaml::Controls::ScrollViewer _verticalTabScrollViewer{ nullptr };
+        Windows::UI::Xaml::Controls::ColumnDefinition _verticalTabColumn{ nullptr };
+        Windows::UI::Xaml::Controls::ColumnDefinition _verticalTabSplitterColumn{ nullptr };
         winrt::TerminalApp::ColorPickupFlyout _tabColorPicker{ nullptr };
 
         Microsoft::Terminal::Settings::Model::CascadiaSettings _settings{ nullptr };
@@ -254,6 +264,17 @@ namespace winrt::TerminalApp::implementation
         bool _isMaximized{ false };
         bool _isAlwaysOnTop{ false };
         bool _showTabsFullscreen{ false };
+        bool _showVerticalTabs{ false };
+        bool _verticalTabsPinned{ true };
+        bool _verticalTabsExpanded{ true };
+        bool _resizingVerticalTabs{ false };
+        bool _pointerOverVerticalTabsPane{ false };
+        bool _pointerOverVerticalTabsSplitter{ false };
+        double _verticalTabPaneWidth{ 280.0 };
+        double _verticalTabCollapsedWidth{ 40.0 };
+        double _verticalTabMinWidth{ 220.0 };
+        Windows::Foundation::Point _verticalTabResizeAnchor{};
+        double _verticalTabResizeStartWidth{ 0.0 };
 
         std::optional<uint32_t> _loadFromPersistedLayoutIdx{};
 
@@ -342,6 +363,7 @@ namespace winrt::TerminalApp::implementation
         void _SettingsButtonOnClick(const IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& eventArgs);
         void _CommandPaletteButtonOnClick(const IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& eventArgs);
         void _AboutButtonOnClick(const IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& eventArgs);
+        void _VerticalTabsMenuItemOnClick(const IInspectable& sender, const Windows::UI::Xaml::RoutedEventArgs& eventArgs);
 
         void _KeyDownHandler(const Windows::Foundation::IInspectable& sender, const Windows::UI::Xaml::Input::KeyRoutedEventArgs& e);
         static ::Microsoft::Terminal::Core::ControlKeyStates _GetPressedModifierKeys() noexcept;
@@ -353,6 +375,16 @@ namespace winrt::TerminalApp::implementation
         void _UpdateTabIcon(Tab& tab);
         void _UpdateTabView();
         void _UpdateTabWidthMode();
+        void _UpdateTitlebarContent();
+        void _RefreshVerticalTabsPane();
+        void _UpdateVerticalTabRows();
+        void _ApplyVerticalTabPaneState();
+        void _SetVerticalTabs(bool enabled);
+        void _ToggleVerticalTabs();
+        safe_void_coroutine _ToggleVerticalTabsAfterContextMenuDismissed();
+        bool _ShouldShowVerticalTabs() const;
+        void _UpdateVerticalTabButtonGlyph();
+        void _SetNewTabButtonFlyout(winrt::Microsoft::UI::Xaml::Controls::SplitButton button, const winrt::Windows::UI::Xaml::Controls::MenuFlyout& flyout);
         void _SetBackgroundImage(const winrt::Microsoft::Terminal::Settings::Model::IAppearanceConfig& newAppearance);
 
         void _DuplicateFocusedTab();
@@ -372,6 +404,7 @@ namespace winrt::TerminalApp::implementation
         void _DismissTabContextMenus();
         void _FocusCurrentTab(const bool focusAlways);
         bool _HasMultipleTabs() const;
+        void _SelectTab(const winrt::TerminalApp::Tab& tab);
 
         void _SelectNextTab(const bool bMoveRight, const Windows::Foundation::IReference<Microsoft::Terminal::Settings::Model::TabSwitcherMode>& customTabSwitcherMode);
         bool _SelectTab(uint32_t tabIndex);
@@ -561,6 +594,18 @@ namespace winrt::TerminalApp::implementation
 
         void _WindowSizeChanged(const IInspectable sender, const winrt::Microsoft::Terminal::Control::WindowSizeChangedEventArgs args);
         void _windowPropertyChanged(const IInspectable& sender, const winrt::Windows::UI::Xaml::Data::PropertyChangedEventArgs& args);
+        void _VerticalNewTabButtonClick(const IInspectable& sender, const winrt::Microsoft::UI::Xaml::Controls::SplitButtonClickEventArgs& args);
+        void _VerticalNewTabButtonDrop(const IInspectable& sender, const winrt::Windows::UI::Xaml::DragEventArgs& e);
+        void _VerticalNewTabButtonDragOver(const IInspectable& sender, const winrt::Windows::UI::Xaml::DragEventArgs& e);
+        void _VerticalAddTabButtonClick(const IInspectable& sender, const winrt::Windows::UI::Xaml::RoutedEventArgs& e);
+        void _VerticalTabPinButtonClick(const IInspectable& sender, const winrt::Windows::UI::Xaml::RoutedEventArgs& e);
+        void _VerticalTabsPanePointerEntered(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);
+        void _VerticalTabsPanePointerExited(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);
+        void _VerticalTabsSplitterPointerEntered(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);
+        void _VerticalTabsSplitterPointerExited(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);
+        void _VerticalTabsSplitterPointerPressed(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);
+        void _VerticalTabsSplitterPointerMoved(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);
+        void _VerticalTabsSplitterPointerReleased(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);
 
         void _onTabDragStarting(const winrt::Microsoft::UI::Xaml::Controls::TabView& sender, const winrt::Microsoft::UI::Xaml::Controls::TabViewTabDragStartingEventArgs& e);
         void _onTabStripDragOver(const winrt::Windows::Foundation::IInspectable& sender, const winrt::Windows::UI::Xaml::DragEventArgs& e);

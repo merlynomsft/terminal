@@ -15,6 +15,11 @@
 
     <Grid x:Name="Root"
           Background="Transparent">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition x:Name="VerticalTabColumn" Width="0" />
+            <ColumnDefinition x:Name="VerticalTabSplitterColumn" Width="0" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -22,10 +27,12 @@
         </Grid.RowDefinitions>
 
         <local:TabRowControl x:Name="TabRow"
+                             Grid.ColumnSpan="3"
                              Grid.Row="0"
                              KeyUp="_KeyDownHandler" />
 
         <StackPanel Grid.Row="1"
+                    Grid.ColumnSpan="3"
                     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
             <mux:InfoBar x:Name="KeyboardServiceWarningInfoBar"
                          x:Load="False"
@@ -56,8 +63,94 @@
             </mux:InfoBar>
         </StackPanel>
 
+        <Grid x:Name="VerticalTabsPane"
+              AutomationProperties.AutomationId="VerticalTabsPane"
+              Grid.Row="2"
+              Grid.Column="0"
+              Background="{x:Bind TitlebarBrush, Mode=OneWay}"
+              PointerEntered="_VerticalTabsPanePointerEntered"
+              PointerExited="_VerticalTabsPanePointerExited"
+              Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid Padding="4,4,4,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <ToggleButton x:Name="VerticalTabPinButton"
+                              AutomationProperties.AutomationId="VerticalTabPinButton"
+                              Width="28"
+                              Height="28"
+                              Margin="0,0,4,0"
+                              Click="_VerticalTabPinButtonClick"
+                              FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                              FontSize="12"
+                              HorizontalAlignment="Left"
+                              VerticalAlignment="Center" />
+
+                <mux:SplitButton x:Name="VerticalNewTabButton"
+                                 AutomationProperties.AutomationId="VerticalNewTabButton"
+                                 Grid.Column="1"
+                                 Height="28"
+                                 Padding="0"
+                                 HorizontalAlignment="Stretch"
+                                 VerticalAlignment="Stretch"
+                                 AllowDrop="True"
+                                 BorderThickness="0"
+                                 Click="_VerticalNewTabButtonClick"
+                                 Content="&#xE710;"
+                                 DragOver="_VerticalNewTabButtonDragOver"
+                                 Drop="_VerticalNewTabButtonDrop"
+                                 FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                 FontSize="12" />
+            </Grid>
+
+            <ScrollViewer x:Name="VerticalTabScrollViewer"
+                          AutomationProperties.AutomationId="VerticalTabScrollViewer"
+                          Grid.Row="1"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="VerticalTabItemsHost"
+                            AutomationProperties.AutomationId="VerticalTabItemsHost"
+                            Padding="4,4,4,0" />
+            </ScrollViewer>
+
+            <Button x:Name="VerticalAddTabButton"
+                    AutomationProperties.AutomationId="VerticalAddTabButton"
+                    Grid.Row="2"
+                    Margin="4"
+                    Click="_VerticalAddTabButtonClick"
+                    Content="&#xE710;"
+                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                    FontSize="12"
+                    HorizontalAlignment="Stretch" />
+        </Grid>
+
+        <Grid x:Name="VerticalTabsSplitter"
+              AutomationProperties.AutomationId="VerticalTabsSplitter"
+              Grid.Row="2"
+              Grid.Column="1"
+              Background="Transparent"
+              PointerEntered="_VerticalTabsSplitterPointerEntered"
+              PointerExited="_VerticalTabsSplitterPointerExited"
+              PointerPressed="_VerticalTabsSplitterPointerPressed"
+              PointerReleased="_VerticalTabsSplitterPointerReleased"
+              PointerMoved="_VerticalTabsSplitterPointerMoved"
+              Visibility="Collapsed">
+            <Border Width="1"
+                    HorizontalAlignment="Center"
+                    Background="{ThemeResource CardStrokeColorDefaultBrush}" />
+        </Grid>
+
         <Grid x:Name="TabContent"
               Grid.Row="2"
+              Grid.Column="2"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
             <Grid.Background>

@@ -2617,6 +2617,14 @@
     <value>When enabled, the tab bar will be visible when the app is full screen.</value>
     <comment>A description for what the "show tabs in full screen" setting does.</comment>
   </data>
+  <data name="Globals_VerticalTabs.Header" xml:space="preserve">
+    <value>Show tabs vertically</value>
+    <comment>Header for a control to toggle displaying tabs in a vertical sidebar instead of across the top.</comment>
+  </data>
+  <data name="Globals_VerticalTabs.HelpText" xml:space="preserve">
+    <value>When enabled, tabs move into a resizable list on the left side of the window.</value>
+    <comment>A description for what the "show tabs vertically" setting does.</comment>
+  </data>
   <data name="Profile_PathTranslationStyle.[using:Windows.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve">
     <value>Path translation</value>
     <comment>Name for a control to select how file and directory paths are translated.</comment>

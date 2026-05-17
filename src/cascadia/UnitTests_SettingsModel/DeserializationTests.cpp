@@ -366,6 +366,7 @@ namespace SettingsModelUnitTests
         })" };
         static constexpr std::string_view userSettings{ R"({
             "showTabsInTitlebar": false,
+            "verticalTabs": true,
             "initialCols" : 240,
             "initialRows" : 60,
             "profiles": [
@@ -379,6 +380,7 @@ namespace SettingsModelUnitTests
         VERIFY_ARE_EQUAL(true, settings->GlobalSettings().AlwaysShowTabs());
         VERIFY_ARE_EQUAL(240, settings->GlobalSettings().InitialCols());
         VERIFY_ARE_EQUAL(60, settings->GlobalSettings().InitialRows());
+        VERIFY_ARE_EQUAL(true, settings->GlobalSettings().VerticalTabs());
         VERIFY_ARE_EQUAL(false, settings->GlobalSettings().ShowTabsInTitlebar());
     }
 

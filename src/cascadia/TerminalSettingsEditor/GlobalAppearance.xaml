@@ -75,6 +75,13 @@
                           Style="{StaticResource ToggleSwitchInExpanderStyle}" />
         </local:SettingContainer>
 
+        <!--  Vertical tabs  -->
+        <local:SettingContainer x:Name="VerticalTabs"
+                                x:Uid="Globals_VerticalTabs">
+            <ToggleSwitch IsOn="{x:Bind ViewModel.VerticalTabs, Mode=TwoWay}"
+                          Style="{StaticResource ToggleSwitchInExpanderStyle}" />
+        </local:SettingContainer>
+
         <!--  Show Acrylic in Tab Row  -->
         <local:SettingContainer x:Name="AcrylicTabRow"
                                 x:Uid="Globals_AcrylicTabRow">
