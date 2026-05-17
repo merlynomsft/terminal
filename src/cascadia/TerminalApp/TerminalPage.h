@@ -324,13 +324,8 @@ namespace winrt::TerminalApp::implementation
             winrt::com_ptr<winrt::TerminalApp::implementation::Tab> draggedTab{ nullptr };
             winrt::Windows::Foundation::Point dragOffset{ 0, 0 };
             winrt::Windows::Foundation::Point verticalTabPointerDragStart{ 0, 0 };
-            winrt::hstring verticalTabDragTitle{};
             bool verticalTabPointerDragStarted{ false };
         } _stashed;
-        winrt::Windows::UI::Xaml::Controls::Border _verticalTabDragVisual{ nullptr };
-        winrt::Windows::UI::Xaml::Controls::TextBlock _verticalTabDragText{ nullptr };
-        winrt::Windows::UI::Xaml::Media::TranslateTransform _verticalTabDragTransform{ nullptr };
-        winrt::Windows::UI::Core::CoreCursor _verticalTabDragOriginalCursor{ nullptr };
 
         safe_void_coroutine _NewTerminalByDrop(const Windows::Foundation::IInspectable&, winrt::Windows::UI::Xaml::DragEventArgs e);
 
@@ -615,13 +610,11 @@ namespace winrt::TerminalApp::implementation
         void _VerticalTabsSplitterPointerMoved(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);
         void _VerticalTabsSplitterPointerReleased(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);
         void _StartVerticalTabDrag(const winrt::TerminalApp::Tab& tab, const winrt::Windows::UI::Xaml::FrameworkElement& draggedElement, const winrt::Windows::UI::Xaml::DragStartingEventArgs& e);
+        safe_void_coroutine _StartVerticalTabSystemDrag(winrt::Windows::UI::Xaml::UIElement source, winrt::Windows::UI::Input::PointerPoint pointerPoint);
         void _VerticalTabDragCompleted(const IInspectable& sender, const winrt::Windows::UI::Xaml::DropCompletedEventArgs& e);
         void _VerticalTabDragOver(const IInspectable& sender, const winrt::Windows::UI::Xaml::DragEventArgs& e);
         void _VerticalTabDrop(const IInspectable& sender, const winrt::Windows::UI::Xaml::DragEventArgs& e);
         int32_t _GetVerticalTabDropIndex(const winrt::Windows::UI::Xaml::DragEventArgs& e) const;
-        void _ShowVerticalTabDragVisual(const winrt::Windows::Foundation::Point point);
-        void _UpdateVerticalTabDragVisual(const winrt::Windows::Foundation::Point point);
-        void _HideVerticalTabDragVisual();
         static void _RegisterVerticalTabWindow(const HWND hwnd, const uint64_t windowId);
         static void _UnregisterVerticalTabWindow(const HWND hwnd);
         static std::optional<uint64_t> _GetVerticalTabWindowIdFromPoint(const POINT point);

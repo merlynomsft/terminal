@@ -327,14 +327,13 @@ namespace winrt::TerminalApp::implementation
                     if (const auto tabImpl = page->_GetTabImpl(tab))
                     {
                         page->_stashed.draggedTab = tabImpl;
-                        page->_stashed.verticalTabDragTitle = tab.Title();
                         page->_stashed.verticalTabPointerDragStarted = false;
                         page->_stashed.verticalTabPointerDragStart = e.GetCurrentPoint(page->_verticalTabItemsHost).Position();
                     }
                 }
             };
 
-            const auto trackVerticalTabPointerMoved = [weakThis{ get_weak() }](const IInspectable&, const WUX::Input::PointerRoutedEventArgs& e) {
+            const auto trackVerticalTabPointerMoved = [weakThis{ get_weak() }](const IInspectable& sender, const WUX::Input::PointerRoutedEventArgs& e) {
                 if (auto page{ weakThis.get() })
                 {
                     if (!page->_stashed.draggedTab || !page->_verticalTabItemsHost)
@@ -347,7 +346,6 @@ namespace winrt::TerminalApp::implementation
                     {
                         page->_stashed.draggedTab = nullptr;
                         page->_stashed.verticalTabPointerDragStarted = false;
-                        page->_HideVerticalTabDragVisual();
                         return;
                     }
 
@@ -357,14 +355,12 @@ namespace winrt::TerminalApp::implementation
                          std::abs(position.Y - page->_stashed.verticalTabPointerDragStart.Y) > 8.0))
                     {
                         page->_stashed.verticalTabPointerDragStarted = true;
-                        const auto rootPosition = e.GetCurrentPoint(page->Root()).Position();
-                        page->_ShowVerticalTabDragVisual(rootPosition);
-                        e.Handled(true);
-                    }
-                    else if (page->_stashed.verticalTabPointerDragStarted)
-                    {
-                        const auto rootPosition = e.GetCurrentPoint(page->Root()).Position();
-                        page->_UpdateVerticalTabDragVisual(rootPosition);
+                        if (const auto source = sender.try_as<WUX::UIElement>())
+                        {
+                            const auto pointerPoint = e.GetCurrentPoint(source);
+                            source.ReleasePointerCapture(e.Pointer());
+                            page->_StartVerticalTabSystemDrag(source, pointerPoint);
+                        }
                         e.Handled(true);
                     }
                 }
@@ -384,60 +380,8 @@ namespace winrt::TerminalApp::implementation
                     {
                         page->_stashed.draggedTab = nullptr;
                         page->_stashed.verticalTabPointerDragStarted = false;
-                        page->_HideVerticalTabDragVisual();
                         return;
                     }
-
-                    const auto position = e.GetCurrentPoint(page->_verticalTabItemsHost).Position();
-                    page->_HideVerticalTabDragVisual();
-                    if (position.X < 0 ||
-                        position.Y < 0 ||
-                        position.X > page->_verticalTabItemsHost.ActualWidth() ||
-                        position.Y > page->_verticalTabItemsHost.ActualHeight())
-                    {
-                        POINT screenPoint{};
-                        GetCursorPos(&screenPoint);
-                        const auto targetWindowId = TerminalPage::_GetVerticalTabWindowIdFromPoint(screenPoint);
-                        if (targetWindowId.has_value() && targetWindowId.value() != page->_WindowProperties.WindowId())
-                        {
-                            page->_sendDraggedTabToWindow(winrt::to_hstring(targetWindowId.value()), 0, std::nullopt);
-                        }
-                        else
-                        {
-                            const auto pointerPoint = CoreWindow::GetForCurrentThread().PointerPosition();
-                            page->_sendDraggedTabToWindow(winrt::hstring{ L"-1" }, 0, pointerPoint);
-                        }
-                        page->_stashed.verticalTabPointerDragStarted = false;
-                        e.Handled(true);
-                        return;
-                    }
-
-                    auto targetIndex = gsl::narrow_cast<int32_t>(page->_verticalTabItemsHost.Children().Size());
-                    const auto children = page->_verticalTabItemsHost.Children();
-                    for (auto i = 0u; i < children.Size(); i++)
-                    {
-                        if (const auto element = children.GetAt(i).try_as<WUX::FrameworkElement>())
-                        {
-                            const auto top = element.TransformToVisual(page->_verticalTabItemsHost).TransformPoint({ 0, 0 }).Y;
-                            if (position.Y < top + element.ActualHeight() / 2)
-                            {
-                                targetIndex = gsl::narrow_cast<int32_t>(i);
-                                break;
-                            }
-                        }
-                    }
-
-                    if (const auto sourceIndex = page->_GetTabIndex(*draggedTab))
-                    {
-                        if (*sourceIndex < gsl::narrow_cast<uint32_t>(targetIndex))
-                        {
-                            targetIndex--;
-                        }
-                        page->_TryMoveTab(*sourceIndex, targetIndex);
-                        e.Handled(true);
-                    }
-                    page->_stashed.draggedTab = nullptr;
-                    page->_stashed.verticalTabPointerDragStarted = false;
                 }
             };
 
