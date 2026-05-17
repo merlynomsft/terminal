@@ -3263,17 +3263,6 @@ namespace winrt::Microsoft::Terminal::Control::implementation
             return;
         }
 
-        // Terminal tab drags carry window metadata in the DataPackage. Don't let
-        // the terminal surface treat those as pasteable text when a tab is
-        // dragged over the content area.
-        const auto& props{ e.DataView().Properties() };
-        if (props.HasKey(L"windowId") &&
-            props.HasKey(L"pid") &&
-            winrt::unbox_value_or<uint32_t>(props.TryLookup(L"pid"), 0u) == GetCurrentProcessId())
-        {
-            return;
-        }
-
         // We can only handle drag/dropping StorageItems (files) and plain Text
         // currently. If the format on the clipboard is anything else, returning
         // early here will prevent the drag/drop from doing anything.
