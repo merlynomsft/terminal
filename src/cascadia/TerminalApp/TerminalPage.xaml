@@ -142,7 +142,7 @@
               Grid.Column="1"
               Width="8"
               HorizontalAlignment="Stretch"
-              Background="{ThemeResource TabViewBackground}"
+              Background="{x:Bind TitlebarBrush, Mode=OneWay}"
               IsHitTestVisible="True"
               PointerEntered="_VerticalTabsSplitterPointerEntered"
               PointerExited="_VerticalTabsSplitterPointerExited"
