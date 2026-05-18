@@ -349,6 +349,16 @@ namespace winrt::TerminalApp::implementation
         _verticalNewTabButton = this->VerticalNewTabButton();
         _verticalAddTabButton = this->VerticalAddTabButton();
         _verticalTabPinButton = this->VerticalTabPinButton();
+        const auto expandVerticalTabsOnPointer = WUX::Input::PointerEventHandler{ [weakThis{ get_weak() }](const IInspectable& sender, const WUX::Input::PointerRoutedEventArgs& args) {
+            if (auto page{ weakThis.get() })
+            {
+                page->_VerticalTabsPanePointerEntered(sender, args);
+            }
+        } };
+        _verticalTabsPane.AddHandler(WUX::UIElement::PointerEnteredEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(expandVerticalTabsOnPointer), true);
+        _verticalTabsPane.AddHandler(WUX::UIElement::PointerMovedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(expandVerticalTabsOnPointer), true);
+        _verticalTabPinButton.AddHandler(WUX::UIElement::PointerEnteredEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(expandVerticalTabsOnPointer), true);
+        _verticalTabPinButton.AddHandler(WUX::UIElement::PointerMovedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(expandVerticalTabsOnPointer), true);
         _titlebarPlaceholder = WUX::Controls::Grid{};
         _showVerticalTabs = _settings.GlobalSettings().VerticalTabs();
         _verticalTabPaneWidth = _ClampVerticalTabPaneWidth(_settings.GlobalSettings().VerticalTabWidth());
@@ -534,18 +544,21 @@ namespace winrt::TerminalApp::implementation
         {
             _verticalTabPaneWidth = _ClampVerticalTabPaneWidth(_verticalTabPaneWidth);
         }
-        const auto width = visible ? (_verticalTabsExpanded ? _verticalTabPaneWidth : _verticalTabCollapsedWidth) : 0.0;
-        _verticalTabColumn.Width(GridLengthHelper::FromValueAndType(width, GridUnitType::Pixel));
-        _verticalTabSplitterColumn.Width(GridLengthHelper::FromValueAndType(visible && _verticalTabsExpanded ? 8.0 : 0.0, GridUnitType::Pixel));
+        const auto paneWidth = visible ? (_verticalTabsExpanded ? _verticalTabPaneWidth : _verticalTabCollapsedWidth) : 0.0;
+        const auto reservedWidth = visible ? (_verticalTabsPinned ? paneWidth : _verticalTabCollapsedWidth) : 0.0;
+        _verticalTabsPane.Width(paneWidth);
+        _verticalTabsSplitter.Margin({ std::max(0.0, paneWidth - 8.0), 0, 0, 0 });
+        _verticalTabColumn.Width(GridLengthHelper::FromValueAndType(reservedWidth, GridUnitType::Pixel));
+        _verticalTabSplitterColumn.Width(GridLengthHelper::FromValueAndType(0.0, GridUnitType::Pixel));
 
         if (_verticalNewTabButton)
         {
-            _verticalNewTabButton.Visibility(visible && _verticalTabsExpanded ? Visibility::Visible : Visibility::Collapsed);
+            _verticalNewTabButton.Visibility(Visibility::Collapsed);
         }
 
         if (_verticalAddTabButton)
         {
-            _verticalAddTabButton.HorizontalContentAlignment(_verticalTabsExpanded ? HorizontalAlignment::Center : HorizontalAlignment::Stretch);
+            _verticalAddTabButton.Visibility(visible && _verticalTabsExpanded ? Visibility::Visible : Visibility::Collapsed);
         }
 
         _UpdateVerticalTabButtonGlyph();
@@ -645,7 +658,7 @@ namespace winrt::TerminalApp::implementation
     void TerminalPage::_VerticalTabPinButtonClick(const IInspectable&, const winrt::Windows::UI::Xaml::RoutedEventArgs&)
     {
         _verticalTabsPinned = !_verticalTabsPinned;
-        _verticalTabsExpanded = _verticalTabsPinned;
+        _verticalTabsExpanded = true;
 
         TraceLoggingWrite(
             g_hTerminalAppProvider,
@@ -1446,7 +1459,6 @@ namespace winrt::TerminalApp::implementation
             }
         });
         _SetNewTabButtonFlyout(_newTabButton, newTabFlyout);
-        _SetNewTabButtonFlyout(_verticalNewTabButton, newTabFlyout);
     }
 
     void TerminalPage::_SetNewTabButtonFlyout(winrt::Microsoft::UI::Xaml::Controls::SplitButton button,

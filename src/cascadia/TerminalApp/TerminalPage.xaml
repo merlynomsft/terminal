@@ -67,7 +67,9 @@
               AutomationProperties.AutomationId="VerticalTabsPane"
               Grid.Row="2"
               Grid.Column="0"
+              Canvas.ZIndex="10"
               Background="{x:Bind TitlebarBrush, Mode=OneWay}"
+              HorizontalAlignment="Left"
               PointerEntered="_VerticalTabsPanePointerEntered"
               PointerExited="_VerticalTabsPanePointerExited"
               Visibility="Collapsed">
@@ -80,7 +82,6 @@
             <Grid Padding="4,4,4,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
                 <ToggleButton x:Name="VerticalTabPinButton"
@@ -92,24 +93,28 @@
                               FontFamily="{ThemeResource SymbolThemeFontFamily}"
                               FontSize="12"
                               HorizontalAlignment="Left"
+                              PointerEntered="_VerticalTabsPanePointerEntered"
+                              PointerMoved="_VerticalTabsPanePointerEntered"
                               VerticalAlignment="Center" />
 
                 <mux:SplitButton x:Name="VerticalNewTabButton"
-                                  AutomationProperties.AutomationId="VerticalNewTabButton"
+                                  AutomationProperties.AutomationId="VerticalNewTabButtonHidden"
+                                  Visibility="Collapsed"
+                                  IsTabStop="False"
                                   Grid.Column="1"
                                   Height="28"
                                   MinWidth="0"
                                   Padding="0"
-                                 HorizontalAlignment="Stretch"
-                                 VerticalAlignment="Stretch"
-                                 AllowDrop="True"
-                                 BorderThickness="0"
-                                 Click="_VerticalNewTabButtonClick"
-                                 Content="&#xE710;"
-                                 DragOver="_VerticalNewTabButtonDragOver"
-                                 Drop="_VerticalNewTabButtonDrop"
-                                 FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                 FontSize="12" />
+                                  HorizontalAlignment="Stretch"
+                                  VerticalAlignment="Stretch"
+                                  AllowDrop="True"
+                                  BorderThickness="0"
+                                  Click="_VerticalNewTabButtonClick"
+                                  Content="&#xE710;"
+                                  DragOver="_VerticalNewTabButtonDragOver"
+                                  Drop="_VerticalNewTabButtonDrop"
+                                  FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                  FontSize="12" />
             </Grid>
 
             <ScrollViewer x:Name="VerticalTabScrollViewer"
@@ -122,26 +127,32 @@
                             Padding="4,4,4,0" />
             </ScrollViewer>
 
-            <Button x:Name="VerticalAddTabButton"
-                    AutomationProperties.AutomationId="VerticalAddTabButton"
-                    Grid.Row="2"
-                    Margin="4"
-                    Click="_VerticalAddTabButtonClick"
-                    Content="&#xE710;"
-                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                    FontSize="12"
-                    HorizontalAlignment="Stretch" />
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="28" />
+                </Grid.ColumnDefinitions>
+
+                <Button x:Name="VerticalAddTabButton"
+                        AutomationProperties.AutomationId="VerticalNewTabButton"
+                        Margin="4"
+                        Click="_VerticalAddTabButtonClick"
+                        Content="&#xE710;"
+                        FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                        FontSize="12"
+                        HorizontalAlignment="Stretch" />
+            </Grid>
         </Grid>
 
         <Grid x:Name="VerticalTabsSplitter"
               AutomationProperties.AutomationId="VerticalTabsSplitter"
               AutomationProperties.AccessibilityView="Control"
               AutomationProperties.Name="Vertical tabs splitter"
-              Canvas.ZIndex="10"
+              Canvas.ZIndex="11"
               Grid.Row="2"
-              Grid.Column="1"
+              Grid.Column="0"
               Width="8"
-              HorizontalAlignment="Stretch"
+              HorizontalAlignment="Left"
               Background="{x:Bind TitlebarBrush, Mode=OneWay}"
               IsHitTestVisible="True"
               PointerEntered="_VerticalTabsSplitterPointerEntered"
