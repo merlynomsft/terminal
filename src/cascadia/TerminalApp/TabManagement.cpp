@@ -319,6 +319,11 @@ namespace winrt::TerminalApp::implementation
                         return;
                     }
 
+                    if (!e.GetCurrentPoint(page->_verticalTabItemsHost).Properties().IsLeftButtonPressed())
+                    {
+                        return;
+                    }
+
                     if (const auto source = sender.try_as<WUX::UIElement>())
                     {
                         source.CapturePointer(e.Pointer());
@@ -386,6 +391,8 @@ namespace winrt::TerminalApp::implementation
             };
 
             auto rowBorder = WUX::Controls::Border{};
+            winrt::Windows::UI::Xaml::Automation::AutomationProperties::SetAutomationId(rowBorder, fmt::format(FMT_COMPILE(L"VerticalTabItem{}"), tab.TabViewIndex()));
+            winrt::Windows::UI::Xaml::Automation::AutomationProperties::SetName(rowBorder, tab.Title());
             rowBorder.Margin({ 0, 0, 0, 4 });
             rowBorder.Padding({ 8, 6, 8, 6 });
             rowBorder.Background(tab == focusedTab ? tab.TabViewItem().Background() : transparentBrush);
@@ -419,6 +426,25 @@ namespace winrt::TerminalApp::implementation
             };
             rowBorder.RightTapped(showContextMenu);
 
+            const auto createVerticalContextMenu = [weakThis{ get_weak() }]() {
+                auto verticalContextMenu = WUX::Controls::MenuFlyout{};
+                auto toggleVerticalTabsItem = WUX::Controls::MenuFlyoutItem{};
+                toggleVerticalTabsItem.Text(RS_(L"TurnOffVerticalTabsText"));
+                winrt::Windows::UI::Xaml::Automation::AutomationProperties::SetAutomationId(toggleVerticalTabsItem, L"ToggleVerticalTabsMenuItem");
+                toggleVerticalTabsItem.Click([weakThis](auto&&, auto&&) {
+                    if (auto page{ weakThis.get() })
+                    {
+                        (void)page->_ToggleVerticalTabsAfterContextMenuDismissed();
+                    }
+                });
+                verticalContextMenu.Items().Append(toggleVerticalTabsItem);
+                return verticalContextMenu;
+            };
+            WUX::Controls::Primitives::FlyoutBase::SetAttachedFlyout(rowBorder, createVerticalContextMenu());
+            rowBorder.ContextRequested([rowBorder](auto&&, auto&&) {
+                WUX::Controls::Primitives::FlyoutBase::ShowAttachedFlyout(rowBorder);
+            });
+
             const auto selectTab = [weakThis{ get_weak() }, tab]() {
                 if (auto page{ weakThis.get() })
                 {
@@ -441,7 +467,7 @@ namespace winrt::TerminalApp::implementation
             rowGrid.ColumnDefinitions().GetAt(2).Width(GridLengthHelper::FromValueAndType(0.0, GridUnitType::Auto));
 
             auto selectButton = WUX::Controls::Button{};
-            winrt::Windows::UI::Xaml::Automation::AutomationProperties::SetAutomationId(selectButton, fmt::format(FMT_COMPILE(L"VerticalTabItem{}"), tab.TabViewIndex()));
+            winrt::Windows::UI::Xaml::Automation::AutomationProperties::SetAutomationId(selectButton, fmt::format(FMT_COMPILE(L"VerticalTabSelect{}"), tab.TabViewIndex()));
             winrt::Windows::UI::Xaml::Automation::AutomationProperties::SetName(selectButton, tab.Title());
             selectButton.Background(transparentBrush);
             selectButton.BorderThickness({ 0, 0, 0, 0 });
@@ -449,21 +475,15 @@ namespace winrt::TerminalApp::implementation
             selectButton.HorizontalAlignment(HorizontalAlignment::Stretch);
             selectButton.HorizontalContentAlignment(HorizontalAlignment::Stretch);
             selectButton.VerticalAlignment(VerticalAlignment::Center);
+            selectButton.IsTabStop(true);
             selectButton.RightTapped(showContextMenu);
+            WUX::Controls::Primitives::FlyoutBase::SetAttachedFlyout(selectButton, createVerticalContextMenu());
+            selectButton.ContextRequested([selectButton](auto&&, auto&&) {
+                WUX::Controls::Primitives::FlyoutBase::ShowAttachedFlyout(selectButton);
+            });
             selectButton.AllowDrop(true);
             selectButton.DragOver({ get_weak(), &TerminalPage::_VerticalTabDragOver });
             selectButton.Drop({ get_weak(), &TerminalPage::_VerticalTabDrop });
-            selectButton.CanDrag(true);
-            selectButton.DragStarting([weakThis{ get_weak() }, tab](const IInspectable& sender, const WUX::DragStartingEventArgs& e) {
-                if (auto page{ weakThis.get() })
-                {
-                    if (const auto draggedElement = sender.try_as<WUX::FrameworkElement>())
-                    {
-                        page->_StartVerticalTabDrag(tab, draggedElement, e);
-                    }
-                }
-            });
-            selectButton.DropCompleted({ get_weak(), &TerminalPage::_VerticalTabDragCompleted });
             selectButton.Click([selectTab](auto&&, auto&&) {
                 selectTab();
             });
@@ -479,24 +499,18 @@ namespace winrt::TerminalApp::implementation
             selectButtonContent.ColumnDefinitions().GetAt(0).Width(GridLengthHelper::FromValueAndType(18.0, GridUnitType::Pixel));
             selectButtonContent.ColumnDefinitions().GetAt(1).Width(GridLengthHelper::FromValueAndType(1.0, GridUnitType::Star));
 
-            if (!tab.Icon().empty())
-            {
-                auto iconPresenter = WUX::Controls::ContentPresenter{};
-                iconPresenter.Content(UI::IconPathConverter::IconWUX(tab.Icon()));
-                iconPresenter.VerticalAlignment(VerticalAlignment::Center);
-                selectButtonContent.Children().Append(iconPresenter);
-            }
-            else
-            {
-                auto icon = WUX::Controls::FontIcon{};
-                icon.Glyph(L"\xE756");
-                icon.FontFamily(Media::FontFamily{ L"Segoe Fluent Icons, Segoe MDL2 Assets" });
-                icon.VerticalAlignment(VerticalAlignment::Center);
-                selectButtonContent.Children().Append(icon);
-            }
-
             if (_verticalTabsExpanded)
             {
+                if (!tab.Icon().empty())
+                {
+                    auto iconPresenter = WUX::Controls::ContentPresenter{};
+                    iconPresenter.Content(UI::IconPathConverter::IconWUX(tab.Icon()));
+                    iconPresenter.VerticalAlignment(VerticalAlignment::Center);
+                    iconPresenter.IsHitTestVisible(false);
+                    WUX::Controls::Grid::SetColumn(iconPresenter, 0);
+                    selectButtonContent.Children().Append(iconPresenter);
+                }
+
                 auto header = winrt::TerminalApp::TabHeaderControl{};
                 header.VerticalAlignment(VerticalAlignment::Center);
                 header.IsHitTestVisible(false);
@@ -531,6 +545,23 @@ namespace winrt::TerminalApp::implementation
             }
             else
             {
+                if (!tab.Icon().empty())
+                {
+                    auto iconPresenter = WUX::Controls::ContentPresenter{};
+                    iconPresenter.Content(UI::IconPathConverter::IconWUX(tab.Icon()));
+                    iconPresenter.VerticalAlignment(VerticalAlignment::Center);
+                    iconPresenter.IsHitTestVisible(false);
+                    selectButtonContent.Children().Append(iconPresenter);
+                }
+                else
+                {
+                    auto icon = WUX::Controls::FontIcon{};
+                    icon.Glyph(L"\xE756");
+                    icon.FontFamily(Media::FontFamily{ L"Segoe Fluent Icons, Segoe MDL2 Assets" });
+                    icon.VerticalAlignment(VerticalAlignment::Center);
+                    selectButtonContent.Children().Append(icon);
+                }
+
                 WUX::Controls::ToolTipService::SetToolTip(rowBorder, box_value(tab.Title()));
             }
 

@@ -174,6 +174,7 @@ namespace winrt::TerminalApp::implementation
         winrt::hstring _lastIconPath{};
         std::optional<winrt::Windows::UI::Color> _runtimeTabColor{};
         winrt::TerminalApp::TabHeaderControl _headerControl{};
+        winrt::Windows::UI::Xaml::Controls::ContentPresenter _headerIconPresenter{ nullptr };
         winrt::TerminalApp::TerminalTabStatus _tabStatus{};
 
         winrt::TerminalApp::ColorPickupFlyout _tabColorPickup{ nullptr };
@@ -225,7 +226,8 @@ namespace winrt::TerminalApp::implementation
         void _BellIndicatorTimerTick(const Windows::Foundation::IInspectable& sender, const Windows::Foundation::IInspectable& e);
 
         void _UpdateHeaderControlMaxWidth();
-
+        winrt::Windows::UI::Xaml::Controls::IconElement _CreateHeaderIcon() const;
+        void _UpdateHeaderIcons();
         void _CreateContextMenu();
         winrt::hstring _CreateToolTipTitle();
 

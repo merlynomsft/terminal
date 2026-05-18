@@ -123,6 +123,7 @@ namespace SettingsModelUnitTests
                 "showTabsInTitlebar": true,
                 "showTerminalTitleInTitlebar": true,
                 "verticalTabs": false,
+                "verticalTabWidth": 280,
                 "tabWidthMode": "equal",
                 "tabSwitcherMode": "mru",
 

@@ -351,6 +351,7 @@ namespace winrt::TerminalApp::implementation
         _verticalTabPinButton = this->VerticalTabPinButton();
         _titlebarPlaceholder = WUX::Controls::Grid{};
         _showVerticalTabs = _settings.GlobalSettings().VerticalTabs();
+        _verticalTabPaneWidth = _ClampVerticalTabPaneWidth(_settings.GlobalSettings().VerticalTabWidth());
         if (_verticalTabItemsHost)
         {
             _verticalTabItemsHost.AllowDrop(true);
@@ -529,9 +530,13 @@ namespace winrt::TerminalApp::implementation
         _verticalTabsPane.Visibility(visible ? Visibility::Visible : Visibility::Collapsed);
         _verticalTabsSplitter.Visibility(visible && _verticalTabsExpanded ? Visibility::Visible : Visibility::Collapsed);
 
+        if (visible && _verticalTabsExpanded)
+        {
+            _verticalTabPaneWidth = _ClampVerticalTabPaneWidth(_verticalTabPaneWidth);
+        }
         const auto width = visible ? (_verticalTabsExpanded ? _verticalTabPaneWidth : _verticalTabCollapsedWidth) : 0.0;
         _verticalTabColumn.Width(GridLengthHelper::FromValueAndType(width, GridUnitType::Pixel));
-        _verticalTabSplitterColumn.Width(GridLengthHelper::FromValueAndType(visible && _verticalTabsExpanded ? 4.0 : 0.0, GridUnitType::Pixel));
+        _verticalTabSplitterColumn.Width(GridLengthHelper::FromValueAndType(visible && _verticalTabsExpanded ? 8.0 : 0.0, GridUnitType::Pixel));
 
         if (_verticalNewTabButton)
         {
@@ -708,8 +713,7 @@ namespace winrt::TerminalApp::implementation
         {
             const auto current = e.GetCurrentPoint(*this).Position();
             const auto delta = current.X - _verticalTabResizeAnchor.X;
-            const auto maxWidth = std::max(_verticalTabMinWidth, static_cast<double>(ActualWidth()) * 0.5);
-            _verticalTabPaneWidth = std::clamp(_verticalTabResizeStartWidth + delta, _verticalTabMinWidth, maxWidth);
+            _verticalTabPaneWidth = _ClampVerticalTabPaneWidth(_verticalTabResizeStartWidth + delta);
             _ApplyVerticalTabPaneState();
             e.Handled(true);
         }
@@ -721,6 +725,7 @@ namespace winrt::TerminalApp::implementation
         {
             sender.as<WUX::Controls::Grid>().ReleasePointerCapture(e.Pointer());
             _resizingVerticalTabs = false;
+            _PersistVerticalTabPaneWidth();
 
             if (!_verticalTabsPinned && !_pointerOverVerticalTabsPane && !_pointerOverVerticalTabsSplitter)
             {
@@ -729,6 +734,32 @@ namespace winrt::TerminalApp::implementation
             }
 
             e.Handled(true);
+        }
+    }
+
+    double TerminalPage::_ClampVerticalTabPaneWidth(const double width) const
+    {
+        auto clamped = std::max(width, _verticalTabMinWidth);
+        if (const auto actualWidth = ActualWidth(); actualWidth > 0)
+        {
+            const auto maxWidth = std::max(_verticalTabMinWidth, actualWidth * 0.5);
+            clamped = std::min(clamped, maxWidth);
+        }
+        return clamped;
+    }
+
+    void TerminalPage::_PersistVerticalTabPaneWidth()
+    {
+        if (!_settings)
+        {
+            return;
+        }
+
+        const auto width = gsl::narrow_cast<int32_t>(std::round(_ClampVerticalTabPaneWidth(_verticalTabPaneWidth)));
+        if (_settings.GlobalSettings().VerticalTabWidth() != width)
+        {
+            _settings.GlobalSettings().VerticalTabWidth(width);
+            _settings.WriteSettingsToDisk();
         }
     }
 
@@ -4361,6 +4392,7 @@ namespace winrt::TerminalApp::implementation
 
         _showTabsFullscreen = _settings.GlobalSettings().ShowTabsFullscreen();
         _showVerticalTabs = _settings.GlobalSettings().VerticalTabs();
+        _verticalTabPaneWidth = _ClampVerticalTabPaneWidth(_settings.GlobalSettings().VerticalTabWidth());
         for (const auto& tab : _tabs)
         {
             if (auto tabImpl = _GetTabImpl(tab))
