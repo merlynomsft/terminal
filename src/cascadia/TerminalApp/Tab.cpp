@@ -108,20 +108,8 @@ namespace winrt::TerminalApp::implementation
 
         _UpdateHeaderControlMaxWidth();
 
-        _headerIconPresenter = WUX::Controls::ContentPresenter{};
-        _headerIconPresenter.Width(16);
-        _headerIconPresenter.Height(16);
-        _headerIconPresenter.Margin({ 0, 0, 8, 0 });
-        _headerIconPresenter.Visibility(Visibility::Collapsed);
-        _headerIconPresenter.IsHitTestVisible(false);
-
-        auto headerStack = WUX::Controls::StackPanel{};
-        headerStack.Orientation(WUX::Controls::Orientation::Horizontal);
-        headerStack.Children().Append(_headerIconPresenter);
-        headerStack.Children().Append(_headerControl);
-
         // Use our header control as the TabViewItem's header
-        TabViewItem().Header(headerStack);
+        TabViewItem().Header(_headerControl);
     }
 
     void Tab::SetSidebarHeaderControl(const winrt::TerminalApp::TabHeaderControl& control)
@@ -143,8 +131,6 @@ namespace winrt::TerminalApp::implementation
         _sidebarHeaderControl.TabStatus(_tabStatus);
         _sidebarHeaderControl.Title(Title());
         _sidebarHeaderControl.RenamerMaxWidth(HeaderRenameBoxWidthTitleLength);
-        _UpdateHeaderIcons();
-
         _sidebarHeaderTitleChangeToken = _sidebarHeaderControl.TitleChangeRequested([weakThis = get_weak()](auto&& title) {
             if (auto tab{ weakThis.get() })
             {
@@ -464,7 +450,6 @@ namespace winrt::TerminalApp::implementation
             bool isMonochrome = iconStyle == IconStyle::Monochrome;
             TabViewItem().IconSource(Microsoft::Terminal::UI::IconPathConverter::IconSourceMUX(_lastIconPath, isMonochrome));
         }
-        _UpdateHeaderIcons();
     }
 
     // Method Description:
@@ -489,27 +474,6 @@ namespace winrt::TerminalApp::implementation
                 TabViewItem().IconSource(Microsoft::Terminal::UI::IconPathConverter::IconSourceMUX(_lastIconPath, _lastIconStyle == IconStyle::Monochrome));
             }
             _iconHidden = hide;
-            _UpdateHeaderIcons();
-        }
-    }
-
-    WUX::Controls::IconElement Tab::_CreateHeaderIcon() const
-    {
-        if (_iconHidden || _lastIconStyle == IconStyle::Hidden || _lastIconPath.empty())
-        {
-            return nullptr;
-        }
-
-        return Microsoft::Terminal::UI::IconPathConverter::IconWUX(_lastIconPath);
-    }
-
-    void Tab::_UpdateHeaderIcons()
-    {
-        if (_headerIconPresenter)
-        {
-            const auto icon = _CreateHeaderIcon();
-            _headerIconPresenter.Content(icon);
-            _headerIconPresenter.Visibility(icon ? Visibility::Visible : Visibility::Collapsed);
         }
     }
 

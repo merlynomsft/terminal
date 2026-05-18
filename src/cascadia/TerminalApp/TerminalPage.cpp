@@ -680,11 +680,16 @@ namespace winrt::TerminalApp::implementation
     void TerminalPage::_VerticalTabsSplitterPointerEntered(const IInspectable&, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs&)
     {
         _pointerOverVerticalTabsSplitter = true;
+        CoreWindow::GetForCurrentThread().PointerCursor(CoreCursor{ CoreCursorType::SizeWestEast, 0 });
     }
 
     void TerminalPage::_VerticalTabsSplitterPointerExited(const IInspectable&, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs&)
     {
         _pointerOverVerticalTabsSplitter = false;
+        if (!_resizingVerticalTabs)
+        {
+            CoreWindow::GetForCurrentThread().PointerCursor(CoreCursor{ CoreCursorType::Arrow, 0 });
+        }
         if (_ShouldShowVerticalTabs() && !_verticalTabsPinned && !_resizingVerticalTabs && !_pointerOverVerticalTabsPane)
         {
             _verticalTabsExpanded = false;
@@ -696,10 +701,11 @@ namespace winrt::TerminalApp::implementation
     {
         if (_ShouldShowVerticalTabs() && _verticalTabsExpanded)
         {
-            const auto splitter = sender.as<WUX::Controls::Grid>();
+            const auto splitter = sender.as<WUX::UIElement>();
             if (splitter.CapturePointer(e.Pointer()))
             {
                 _resizingVerticalTabs = true;
+                CoreWindow::GetForCurrentThread().PointerCursor(CoreCursor{ CoreCursorType::SizeWestEast, 0 });
                 _verticalTabResizeAnchor = e.GetCurrentPoint(*this).Position();
                 _verticalTabResizeStartWidth = _verticalTabPaneWidth;
                 e.Handled(true);
@@ -714,6 +720,7 @@ namespace winrt::TerminalApp::implementation
             const auto current = e.GetCurrentPoint(*this).Position();
             const auto delta = current.X - _verticalTabResizeAnchor.X;
             _verticalTabPaneWidth = _ClampVerticalTabPaneWidth(_verticalTabResizeStartWidth + delta);
+            CoreWindow::GetForCurrentThread().PointerCursor(CoreCursor{ CoreCursorType::SizeWestEast, 0 });
             _ApplyVerticalTabPaneState();
             e.Handled(true);
         }
@@ -723,9 +730,10 @@ namespace winrt::TerminalApp::implementation
     {
         if (_resizingVerticalTabs)
         {
-            sender.as<WUX::Controls::Grid>().ReleasePointerCapture(e.Pointer());
+            sender.as<WUX::UIElement>().ReleasePointerCapture(e.Pointer());
             _resizingVerticalTabs = false;
             _PersistVerticalTabPaneWidth();
+            CoreWindow::GetForCurrentThread().PointerCursor(CoreCursor{ _pointerOverVerticalTabsSplitter ? CoreCursorType::SizeWestEast : CoreCursorType::Arrow, 0 });
 
             if (!_verticalTabsPinned && !_pointerOverVerticalTabsPane && !_pointerOverVerticalTabsSplitter)
             {

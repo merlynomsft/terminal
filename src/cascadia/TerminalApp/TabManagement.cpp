@@ -505,6 +505,9 @@ namespace winrt::TerminalApp::implementation
                 {
                     auto iconPresenter = WUX::Controls::ContentPresenter{};
                     iconPresenter.Content(UI::IconPathConverter::IconWUX(tab.Icon()));
+                    iconPresenter.Width(16);
+                    iconPresenter.Height(16);
+                    iconPresenter.Margin({ 0, 0, 4, 0 });
                     iconPresenter.VerticalAlignment(VerticalAlignment::Center);
                     iconPresenter.IsHitTestVisible(false);
                     WUX::Controls::Grid::SetColumn(iconPresenter, 0);
@@ -549,6 +552,8 @@ namespace winrt::TerminalApp::implementation
                 {
                     auto iconPresenter = WUX::Controls::ContentPresenter{};
                     iconPresenter.Content(UI::IconPathConverter::IconWUX(tab.Icon()));
+                    iconPresenter.Width(16);
+                    iconPresenter.Height(16);
                     iconPresenter.VerticalAlignment(VerticalAlignment::Center);
                     iconPresenter.IsHitTestVisible(false);
                     selectButtonContent.Children().Append(iconPresenter);
