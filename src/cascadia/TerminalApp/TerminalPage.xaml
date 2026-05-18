@@ -67,7 +67,7 @@
               AutomationProperties.AutomationId="VerticalTabsPane"
               Grid.Row="2"
               Grid.Column="0"
-              Background="{ThemeResource TabViewBackground}"
+              Background="{x:Bind TitlebarBrush, Mode=OneWay}"
               PointerEntered="_VerticalTabsPanePointerEntered"
               PointerExited="_VerticalTabsPanePointerExited"
               Visibility="Collapsed">
