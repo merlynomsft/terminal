@@ -134,13 +134,33 @@
                 </Grid.ColumnDefinitions>
 
                 <Button x:Name="VerticalAddTabButton"
-                        AutomationProperties.AutomationId="VerticalNewTabButton"
+                        AutomationProperties.AutomationId="VerticalAddTabButton"
                         Margin="4"
                         Click="_VerticalAddTabButtonClick"
-                        Content="&#xE710;"
+                        PointerPressed="_VerticalAddTabButtonPointerPressed"
                         FontFamily="{ThemeResource SymbolThemeFontFamily}"
                         FontSize="12"
-                        HorizontalAlignment="Stretch" />
+                        HorizontalAlignment="Stretch"
+                        Padding="0">
+                    <Grid HorizontalAlignment="Stretch">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="28" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="&#xE710;"
+                                   FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                   FontSize="12"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1"
+                                   Text="&#xE70D;"
+                                   FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                   FontSize="10"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                </Button>
             </Grid>
         </Grid>
 

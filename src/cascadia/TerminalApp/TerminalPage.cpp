@@ -550,7 +550,6 @@ namespace winrt::TerminalApp::implementation
         _verticalTabsSplitter.Margin({ std::max(0.0, paneWidth - 8.0), 0, 0, 0 });
         _verticalTabColumn.Width(GridLengthHelper::FromValueAndType(reservedWidth, GridUnitType::Pixel));
         _verticalTabSplitterColumn.Width(GridLengthHelper::FromValueAndType(0.0, GridUnitType::Pixel));
-
         if (_verticalNewTabButton)
         {
             _verticalNewTabButton.Visibility(Visibility::Collapsed);
@@ -653,6 +652,22 @@ namespace winrt::TerminalApp::implementation
     void TerminalPage::_VerticalAddTabButtonClick(const IInspectable&, const winrt::Windows::UI::Xaml::RoutedEventArgs&)
     {
         _OpenNewTerminalViaDropdown(NewTerminalArgs());
+    }
+
+    void TerminalPage::_VerticalAddTabButtonPointerPressed(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e)
+    {
+        const auto button = sender.try_as<WUX::Controls::Button>();
+        if (!button || !_newTabButton || !_newTabButton.Flyout())
+        {
+            return;
+        }
+
+        const auto pointer = e.GetCurrentPoint(button);
+        if (pointer.Position().X >= button.ActualWidth() - 32.0)
+        {
+            _newTabButton.Flyout().ShowAt(button);
+            e.Handled(true);
+        }
     }
 
     void TerminalPage::_VerticalTabPinButtonClick(const IInspectable&, const winrt::Windows::UI::Xaml::RoutedEventArgs&)
@@ -1762,8 +1777,13 @@ namespace winrt::TerminalApp::implementation
     // Shows the dropdown flyout.
     void TerminalPage::_OpenNewTabDropdown()
     {
-        auto button = (_showVerticalTabs && _verticalNewTabButton) ? _verticalNewTabButton : _newTabButton;
-        button.Flyout().ShowAt(button);
+        if (_showVerticalTabs && _verticalAddTabButton && _newTabButton && _newTabButton.Flyout())
+        {
+            _newTabButton.Flyout().ShowAt(_verticalAddTabButton);
+            return;
+        }
+
+        _newTabButton.Flyout().ShowAt(_newTabButton);
     }
 
     void TerminalPage::_OpenNewTerminalViaDropdown(const NewTerminalArgs newTerminalArgs)
