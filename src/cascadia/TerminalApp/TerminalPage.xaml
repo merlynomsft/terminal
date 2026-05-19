@@ -68,97 +68,110 @@
               Grid.Row="2"
               Grid.Column="0"
               Grid.ColumnSpan="3"
-              Canvas.ZIndex="10"
+              Canvas.ZIndex="100"
               Background="{x:Bind TitlebarBrush, Mode=OneWay}"
               HorizontalAlignment="Left"
               PointerEntered="_VerticalTabsPanePointerEntered"
               PointerExited="_VerticalTabsPanePointerExited"
               Visibility="Collapsed">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
 
-            <Grid Padding="4,4,4,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+                <Grid Padding="4,4,4,0"
+                      Grid.Row="0"
+                      VerticalAlignment="Top">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
 
-                <ToggleButton x:Name="VerticalTabPinButton"
-                              AutomationProperties.AutomationId="VerticalTabPinButton"
-                              Width="28"
-                              Height="28"
-                              Margin="0,0,4,0"
-                              Click="_VerticalTabPinButtonClick"
-                              FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                              FontSize="12"
-                              HorizontalAlignment="Left"
-                              PointerEntered="_VerticalTabsPanePointerEntered"
-                              PointerMoved="_VerticalTabsPanePointerEntered"
-                              VerticalAlignment="Center" />
-
-                <mux:SplitButton x:Name="VerticalNewTabButton"
-                                  AutomationProperties.AutomationId="VerticalNewTabButtonHidden"
-                                  Visibility="Collapsed"
-                                  IsTabStop="False"
-                                  Grid.Column="1"
+                    <ToggleButton x:Name="VerticalTabPinButton"
+                                  AutomationProperties.AutomationId="VerticalTabPinButton"
+                                  Width="28"
                                   Height="28"
-                                  MinWidth="0"
-                                  Padding="0"
-                                  HorizontalAlignment="Stretch"
-                                  VerticalAlignment="Stretch"
-                                  AllowDrop="True"
-                                  BorderThickness="0"
-                                  Click="_VerticalNewTabButtonClick"
-                                  Content="&#xE710;"
-                                  DragOver="_VerticalNewTabButtonDragOver"
-                                  Drop="_VerticalNewTabButtonDrop"
+                                  Margin="0,0,4,0"
+                                  Click="_VerticalTabPinButtonClick"
                                   FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                  FontSize="12" />
-            </Grid>
+                                  FontSize="12"
+                                  HorizontalAlignment="Left"
+                                  PointerEntered="_VerticalTabsPanePointerEntered"
+                                  PointerMoved="_VerticalTabsPanePointerEntered"
+                                  VerticalAlignment="Center" />
 
-            <ScrollViewer x:Name="VerticalTabScrollViewer"
-                          AutomationProperties.AutomationId="VerticalTabScrollViewer"
-                          Grid.Row="1"
-                          HorizontalScrollBarVisibility="Disabled"
-                          VerticalScrollBarVisibility="Auto">
-                <StackPanel x:Name="VerticalTabItemsHost"
-                            AutomationProperties.AutomationId="VerticalTabItemsHost"
-                            Padding="4,4,4,0" />
-            </ScrollViewer>
+                    <mux:SplitButton x:Name="VerticalNewTabButton"
+                                      AutomationProperties.AutomationId="VerticalNewTabButtonHidden"
+                                      Visibility="Collapsed"
+                                      IsTabStop="False"
+                                      Grid.Column="1"
+                                      Height="28"
+                                      MinWidth="0"
+                                      Padding="0"
+                                      HorizontalAlignment="Stretch"
+                                      VerticalAlignment="Stretch"
+                                      AllowDrop="True"
+                                      BorderThickness="0"
+                                      Click="_VerticalNewTabButtonClick"
+                                      Content="&#xE710;"
+                                      DragOver="_VerticalNewTabButtonDragOver"
+                                      Drop="_VerticalNewTabButtonDrop"
+                                      FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                      FontSize="12" />
+                </Grid>
 
-            <Grid Grid.Row="2">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="28" />
-                </Grid.ColumnDefinitions>
+                <ScrollViewer x:Name="VerticalTabScrollViewer"
+                              AutomationProperties.AutomationId="VerticalTabScrollViewer"
+                              Grid.Row="1"
+                              HorizontalScrollBarVisibility="Disabled"
+                              VerticalAlignment="Top"
+                              VerticalScrollBarVisibility="Auto">
+                    <StackPanel x:Name="VerticalTabItemsHost"
+                                AutomationProperties.AutomationId="VerticalTabItemsHost"
+                                Padding="4,4,4,0" />
+                </ScrollViewer>
 
                 <Button x:Name="VerticalAddTabButton"
                         AutomationProperties.AutomationId="VerticalAddTabButton"
-                        Margin="4"
+                        AutomationProperties.Name="New tab"
+                        Grid.Row="2"
+                        Height="28"
+                        Margin="4,4,4,0"
                         Click="_VerticalAddTabButtonClick"
-                        PointerPressed="_VerticalAddTabButtonPointerPressed"
-                        FontFamily="{ThemeResource SymbolThemeFontFamily}"
                         FontSize="12"
                         HorizontalAlignment="Stretch"
-                        Padding="0">
-                    <Grid HorizontalAlignment="Stretch">
+                        HorizontalContentAlignment="Stretch"
+                        Padding="0"
+                        PointerPressed="_VerticalAddTabButtonPointerPressed"
+                        VerticalAlignment="Top">
+                    <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="28" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0"
+                                   FontFamily="Segoe MDL2 Assets"
+                                   Foreground="White"
+                                   HorizontalAlignment="Center"
+                                   IsHitTestVisible="False"
                                    Text="&#xE710;"
-                                   FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                                   FontSize="12"
-                                   HorizontalAlignment="Center"
                                    VerticalAlignment="Center" />
+                        <Border Grid.Column="1"
+                                Width="1"
+                                Margin="0,5"
+                                HorizontalAlignment="Left"
+                                Background="{ThemeResource SystemControlForegroundBaseHighBrush}"
+                                IsHitTestVisible="False"
+                                Opacity="0.35" />
                         <TextBlock Grid.Column="1"
-                                   Text="&#xE70D;"
-                                   FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                   FontFamily="Segoe MDL2 Assets"
                                    FontSize="10"
+                                   Foreground="White"
                                    HorizontalAlignment="Center"
+                                   IsHitTestVisible="False"
+                                   Text="&#xE70D;"
                                    VerticalAlignment="Center" />
                     </Grid>
                 </Button>
@@ -169,7 +182,7 @@
               AutomationProperties.AutomationId="VerticalTabsSplitter"
               AutomationProperties.AccessibilityView="Control"
               AutomationProperties.Name="Vertical tabs splitter"
-              Canvas.ZIndex="11"
+              Canvas.ZIndex="101"
               Grid.Row="2"
               Grid.Column="0"
               Grid.ColumnSpan="3"
@@ -191,6 +204,7 @@
         <Grid x:Name="TabContent"
               Grid.Row="2"
               Grid.Column="2"
+              Canvas.ZIndex="0"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
             <Grid.Background>

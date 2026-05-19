@@ -603,6 +603,7 @@ namespace winrt::TerminalApp::implementation
         void _VerticalAddTabButtonClick(const IInspectable& sender, const winrt::Windows::UI::Xaml::RoutedEventArgs& e);
         void _VerticalAddTabButtonPointerPressed(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);
         void _VerticalTabPinButtonClick(const IInspectable& sender, const winrt::Windows::UI::Xaml::RoutedEventArgs& e);
+        void _UpdateVerticalTabScrollViewerHeight();
         void _VerticalTabsPanePointerEntered(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);
         void _VerticalTabsPanePointerExited(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);
         void _VerticalTabsRootPointerMoved(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);

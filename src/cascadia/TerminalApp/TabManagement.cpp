@@ -299,6 +299,7 @@ namespace winrt::TerminalApp::implementation
         if (_ShouldShowVerticalTabs())
         {
             _UpdateVerticalTabRows();
+            _UpdateVerticalTabScrollViewerHeight();
         }
     }
 
@@ -341,6 +342,11 @@ namespace winrt::TerminalApp::implementation
             const auto trackVerticalTabPointerMoved = [weakThis{ get_weak() }](const IInspectable& sender, const WUX::Input::PointerRoutedEventArgs& e) {
                 if (auto page{ weakThis.get() })
                 {
+                    if (!page->_verticalTabsPinned && !page->_verticalTabsExpanded)
+                    {
+                        page->_VerticalTabsPanePointerEntered(sender, e);
+                    }
+
                     if (!page->_stashed.draggedTab || !page->_verticalTabItemsHost)
                     {
                         return;

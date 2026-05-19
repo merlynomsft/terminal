@@ -364,6 +364,8 @@ namespace winrt::TerminalApp::implementation
             }
         } };
         AddHandler(WUX::UIElement::PointerMovedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(trackVerticalTabsHover), true);
+        Root().AddHandler(WUX::UIElement::PointerMovedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(trackVerticalTabsHover), true);
+        _tabContent.AddHandler(WUX::UIElement::PointerMovedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(trackVerticalTabsHover), true);
         _verticalTabScrollViewer.AddHandler(WUX::UIElement::PointerEnteredEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(expandVerticalTabsOnPointer), true);
         _verticalTabScrollViewer.AddHandler(WUX::UIElement::PointerMovedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(expandVerticalTabsOnPointer), true);
         _verticalTabItemsHost.AddHandler(WUX::UIElement::PointerEnteredEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(expandVerticalTabsOnPointer), true);
@@ -372,6 +374,27 @@ namespace winrt::TerminalApp::implementation
         _verticalAddTabButton.AddHandler(WUX::UIElement::PointerMovedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(expandVerticalTabsOnPointer), true);
         _verticalTabPinButton.AddHandler(WUX::UIElement::PointerEnteredEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(expandVerticalTabsOnPointer), true);
         _verticalTabPinButton.AddHandler(WUX::UIElement::PointerMovedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(expandVerticalTabsOnPointer), true);
+        const auto updateVerticalTabLayout = [weakThis{ get_weak() }](const IInspectable&, const WUX::SizeChangedEventArgs&) {
+            if (auto page{ weakThis.get() })
+            {
+                page->_UpdateVerticalTabScrollViewerHeight();
+            }
+        };
+        _verticalTabsPane.SizeChanged(updateVerticalTabLayout);
+        _tabContent.SizeChanged(updateVerticalTabLayout);
+        // Keep the hover-expanded vertical rail and splitter above terminal content.
+        auto children = Root().Children();
+        uint32_t childIndex = 0;
+        if (children.IndexOf(_verticalTabsPane, childIndex))
+        {
+            children.RemoveAt(childIndex);
+            children.Append(_verticalTabsPane);
+        }
+        if (children.IndexOf(_verticalTabsSplitter, childIndex))
+        {
+            children.RemoveAt(childIndex);
+            children.Append(_verticalTabsSplitter);
+        }
         _titlebarPlaceholder = WUX::Controls::Grid{};
         _showVerticalTabs = _settings.GlobalSettings().VerticalTabs();
         _verticalTabPaneWidth = _ClampVerticalTabPaneWidth(_settings.GlobalSettings().VerticalTabWidth());
@@ -565,6 +588,7 @@ namespace winrt::TerminalApp::implementation
         if (_verticalTabScrollViewer)
         {
             _verticalTabScrollViewer.Width(paneWidth);
+            _UpdateVerticalTabScrollViewerHeight();
         }
         _verticalTabsSplitter.Margin({ std::max(0.0, paneWidth - 8.0), 0, 0, 0 });
         _verticalTabColumn.Width(GridLengthHelper::FromValueAndType(reservedWidth, GridUnitType::Pixel));
@@ -705,6 +729,42 @@ namespace winrt::TerminalApp::implementation
         _ApplyVerticalTabPaneState();
     }
 
+    void TerminalPage::_UpdateVerticalTabScrollViewerHeight()
+    {
+        if (!_verticalTabScrollViewer || !_verticalTabsPane)
+        {
+            return;
+        }
+
+        const auto availableHeight = std::max(_verticalTabsPane.ActualHeight(), _tabContent ? _tabContent.ActualHeight() : 0.0);
+        if (availableHeight <= 0.0)
+        {
+            return;
+        }
+
+        // Header is 32px high and the new-tab combo uses 32px including its top margin.
+        const auto maxTabListHeight = std::max(0.0, availableHeight - 64.0);
+        // Vertical rows are 31px high with 4px top padding on the host.
+        const auto desiredTabListHeight = static_cast<double>(_tabs.Size()) * 31.0 + 4.0;
+        const auto tabListHeight = std::min(maxTabListHeight, desiredTabListHeight);
+        _verticalTabsPane.Height(availableHeight);
+        _verticalTabScrollViewer.VerticalAlignment(VerticalAlignment::Top);
+        _verticalTabScrollViewer.Margin({ 0.0, 0.0, 0.0, 0.0 });
+        _verticalTabScrollViewer.MaxHeight(tabListHeight);
+        _verticalTabScrollViewer.Height(tabListHeight);
+        if (const auto parentGrid = _verticalTabScrollViewer.Parent().try_as<WUX::Controls::Grid>())
+        {
+            const auto rowDefinitions = parentGrid.RowDefinitions();
+            if (rowDefinitions.Size() > 1)
+            {
+                rowDefinitions.GetAt(1).Height(GridLengthHelper::FromValueAndType(tabListHeight, GridUnitType::Pixel));
+            }
+        }
+        _verticalAddTabButton.VerticalAlignment(VerticalAlignment::Top);
+        _verticalAddTabButton.Margin({ 4.0, 4.0, 4.0, 0.0 });
+        _verticalTabsPane.UpdateLayout();
+    }
+
     void TerminalPage::_VerticalTabsPanePointerEntered(const IInspectable&, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs&)
     {
         _pointerOverVerticalTabsPane = true;
@@ -724,6 +784,10 @@ namespace winrt::TerminalApp::implementation
 
         const auto point = e.GetCurrentPoint(_verticalTabsPane).Position();
         _pointerOverVerticalTabsPane = point.X >= 0 && point.X <= _verticalTabsPane.ActualWidth() && point.Y >= 0 && point.Y <= _verticalTabsPane.ActualHeight();
+        // Let the root-level pointer tracker collapse the expanded hover pane.
+        // The pane can raise PointerExited while its width is changing from the
+        // collapsed rail to the full overlay, and collapsing from this event
+        // makes the hover expansion immediately undo itself.
     }
 
     void TerminalPage::_VerticalTabsRootPointerMoved(const IInspectable&, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e)
