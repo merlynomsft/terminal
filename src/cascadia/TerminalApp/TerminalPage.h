@@ -605,6 +605,7 @@ namespace winrt::TerminalApp::implementation
         void _VerticalTabPinButtonClick(const IInspectable& sender, const winrt::Windows::UI::Xaml::RoutedEventArgs& e);
         void _VerticalTabsPanePointerEntered(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);
         void _VerticalTabsPanePointerExited(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);
+        void _VerticalTabsRootPointerMoved(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);
         void _VerticalTabsSplitterPointerEntered(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);
         void _VerticalTabsSplitterPointerExited(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);
         void _VerticalTabsSplitterPointerPressed(const IInspectable& sender, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e);

@@ -414,35 +414,29 @@ namespace winrt::TerminalApp::implementation
             rowBorder.AddHandler(WUX::UIElement::PointerMovedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(trackVerticalTabPointerMoved), true);
             rowBorder.AddHandler(WUX::UIElement::PointerReleasedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(completeVerticalTabPointerDrag), true);
 
-            const auto showContextMenu = [tab](const IInspectable& sender, const WUX::Input::RightTappedRoutedEventArgs& e) {
+            const auto showTabContextMenu = [tab](const IInspectable& sender) {
                 if (const auto flyout = tab.TabViewItem().ContextFlyout())
                 {
                     if (const auto target = sender.try_as<WUX::FrameworkElement>())
                     {
                         flyout.ShowAt(target);
-                        e.Handled(true);
+                        return true;
                     }
+                }
+                return false;
+            };
+            const auto showContextMenu = [showTabContextMenu](const IInspectable& sender, const WUX::Input::RightTappedRoutedEventArgs& e) {
+                if (showTabContextMenu(sender))
+                {
+                    e.Handled(true);
                 }
             };
             rowBorder.RightTapped(showContextMenu);
-
-            const auto createVerticalContextMenu = [weakThis{ get_weak() }]() {
-                auto verticalContextMenu = WUX::Controls::MenuFlyout{};
-                auto toggleVerticalTabsItem = WUX::Controls::MenuFlyoutItem{};
-                toggleVerticalTabsItem.Text(RS_(L"TurnOffVerticalTabsText"));
-                winrt::Windows::UI::Xaml::Automation::AutomationProperties::SetAutomationId(toggleVerticalTabsItem, L"ToggleVerticalTabsMenuItem");
-                toggleVerticalTabsItem.Click([weakThis](auto&&, auto&&) {
-                    if (auto page{ weakThis.get() })
-                    {
-                        (void)page->_ToggleVerticalTabsAfterContextMenuDismissed();
-                    }
-                });
-                verticalContextMenu.Items().Append(toggleVerticalTabsItem);
-                return verticalContextMenu;
-            };
-            WUX::Controls::Primitives::FlyoutBase::SetAttachedFlyout(rowBorder, createVerticalContextMenu());
-            rowBorder.ContextRequested([rowBorder](auto&&, auto&&) {
-                WUX::Controls::Primitives::FlyoutBase::ShowAttachedFlyout(rowBorder);
+            rowBorder.ContextRequested([showTabContextMenu](const IInspectable& sender, auto&& e) {
+                if (showTabContextMenu(sender))
+                {
+                    e.Handled(true);
+                }
             });
 
             const auto selectTab = [weakThis{ get_weak() }, tab]() {
@@ -477,9 +471,11 @@ namespace winrt::TerminalApp::implementation
             selectButton.VerticalAlignment(VerticalAlignment::Center);
             selectButton.IsTabStop(true);
             selectButton.RightTapped(showContextMenu);
-            WUX::Controls::Primitives::FlyoutBase::SetAttachedFlyout(selectButton, createVerticalContextMenu());
-            selectButton.ContextRequested([selectButton](auto&&, auto&&) {
-                WUX::Controls::Primitives::FlyoutBase::ShowAttachedFlyout(selectButton);
+            selectButton.ContextRequested([showTabContextMenu](const IInspectable& sender, auto&& e) {
+                if (showTabContextMenu(sender))
+                {
+                    e.Handled(true);
+                }
             });
             selectButton.AllowDrop(true);
             selectButton.DragOver({ get_weak(), &TerminalPage::_VerticalTabDragOver });

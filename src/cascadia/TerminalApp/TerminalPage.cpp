@@ -357,6 +357,19 @@ namespace winrt::TerminalApp::implementation
         } };
         _verticalTabsPane.AddHandler(WUX::UIElement::PointerEnteredEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(expandVerticalTabsOnPointer), true);
         _verticalTabsPane.AddHandler(WUX::UIElement::PointerMovedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(expandVerticalTabsOnPointer), true);
+        const auto trackVerticalTabsHover = WUX::Input::PointerEventHandler{ [weakThis{ get_weak() }](const IInspectable& sender, const WUX::Input::PointerRoutedEventArgs& args) {
+            if (auto page{ weakThis.get() })
+            {
+                page->_VerticalTabsRootPointerMoved(sender, args);
+            }
+        } };
+        AddHandler(WUX::UIElement::PointerMovedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(trackVerticalTabsHover), true);
+        _verticalTabScrollViewer.AddHandler(WUX::UIElement::PointerEnteredEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(expandVerticalTabsOnPointer), true);
+        _verticalTabScrollViewer.AddHandler(WUX::UIElement::PointerMovedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(expandVerticalTabsOnPointer), true);
+        _verticalTabItemsHost.AddHandler(WUX::UIElement::PointerEnteredEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(expandVerticalTabsOnPointer), true);
+        _verticalTabItemsHost.AddHandler(WUX::UIElement::PointerMovedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(expandVerticalTabsOnPointer), true);
+        _verticalAddTabButton.AddHandler(WUX::UIElement::PointerEnteredEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(expandVerticalTabsOnPointer), true);
+        _verticalAddTabButton.AddHandler(WUX::UIElement::PointerMovedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(expandVerticalTabsOnPointer), true);
         _verticalTabPinButton.AddHandler(WUX::UIElement::PointerEnteredEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(expandVerticalTabsOnPointer), true);
         _verticalTabPinButton.AddHandler(WUX::UIElement::PointerMovedEvent(), winrt::box_value<WUX::Input::PointerEventHandler>(expandVerticalTabsOnPointer), true);
         _titlebarPlaceholder = WUX::Controls::Grid{};
@@ -547,6 +560,12 @@ namespace winrt::TerminalApp::implementation
         const auto paneWidth = visible ? (_verticalTabsExpanded ? _verticalTabPaneWidth : _verticalTabCollapsedWidth) : 0.0;
         const auto reservedWidth = visible ? (_verticalTabsPinned ? paneWidth : _verticalTabCollapsedWidth) : 0.0;
         _verticalTabsPane.Width(paneWidth);
+        _verticalTabsPane.MinWidth(paneWidth);
+        _verticalTabsPane.MaxWidth(paneWidth);
+        if (_verticalTabScrollViewer)
+        {
+            _verticalTabScrollViewer.Width(paneWidth);
+        }
         _verticalTabsSplitter.Margin({ std::max(0.0, paneWidth - 8.0), 0, 0, 0 });
         _verticalTabColumn.Width(GridLengthHelper::FromValueAndType(reservedWidth, GridUnitType::Pixel));
         _verticalTabSplitterColumn.Width(GridLengthHelper::FromValueAndType(0.0, GridUnitType::Pixel));
@@ -674,6 +693,7 @@ namespace winrt::TerminalApp::implementation
     {
         _verticalTabsPinned = !_verticalTabsPinned;
         _verticalTabsExpanded = true;
+        _pointerOverVerticalTabsPane = true;
 
         TraceLoggingWrite(
             g_hTerminalAppProvider,
@@ -695,14 +715,39 @@ namespace winrt::TerminalApp::implementation
         }
     }
 
-    void TerminalPage::_VerticalTabsPanePointerExited(const IInspectable&, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs&)
+    void TerminalPage::_VerticalTabsPanePointerExited(const IInspectable&, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e)
     {
-        _pointerOverVerticalTabsPane = false;
-        if (_ShouldShowVerticalTabs() && !_verticalTabsPinned && !_resizingVerticalTabs && !_pointerOverVerticalTabsSplitter)
+        if (!_verticalTabsPane)
         {
-            _verticalTabsExpanded = false;
-            _ApplyVerticalTabPaneState();
+            return;
         }
+
+        const auto point = e.GetCurrentPoint(_verticalTabsPane).Position();
+        _pointerOverVerticalTabsPane = point.X >= 0 && point.X <= _verticalTabsPane.ActualWidth() && point.Y >= 0 && point.Y <= _verticalTabsPane.ActualHeight();
+    }
+
+    void TerminalPage::_VerticalTabsRootPointerMoved(const IInspectable&, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs& e)
+    {
+        if (!_ShouldShowVerticalTabs() || _verticalTabsPinned || _resizingVerticalTabs || !_verticalTabsPane)
+        {
+            return;
+        }
+
+        const auto pointer = e.GetCurrentPoint(*this).Position();
+        const auto paneOrigin = _verticalTabsPane.TransformToVisual(*this).TransformPoint({ 0, 0 });
+        const auto pointerYInPane = pointer.Y >= paneOrigin.Y && pointer.Y <= paneOrigin.Y + _verticalTabsPane.ActualHeight();
+        const auto hoverWidth = _verticalTabsExpanded ? _verticalTabPaneWidth : _verticalTabCollapsedWidth;
+        const auto pointerInRail = pointer.X >= paneOrigin.X && pointer.X <= paneOrigin.X + hoverWidth && pointerYInPane;
+
+        if (!_verticalTabsExpanded && pointerInRail)
+        {
+            _pointerOverVerticalTabsPane = true;
+            _verticalTabsExpanded = true;
+            _ApplyVerticalTabPaneState();
+            return;
+        }
+
+        _pointerOverVerticalTabsPane = pointerInRail;
     }
 
     void TerminalPage::_VerticalTabsSplitterPointerEntered(const IInspectable&, const winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs&)
@@ -717,11 +762,6 @@ namespace winrt::TerminalApp::implementation
         if (!_resizingVerticalTabs)
         {
             CoreWindow::GetForCurrentThread().PointerCursor(CoreCursor{ CoreCursorType::Arrow, 0 });
-        }
-        if (_ShouldShowVerticalTabs() && !_verticalTabsPinned && !_resizingVerticalTabs && !_pointerOverVerticalTabsPane)
-        {
-            _verticalTabsExpanded = false;
-            _ApplyVerticalTabPaneState();
         }
     }
 
@@ -762,12 +802,6 @@ namespace winrt::TerminalApp::implementation
             _resizingVerticalTabs = false;
             _PersistVerticalTabPaneWidth();
             CoreWindow::GetForCurrentThread().PointerCursor(CoreCursor{ _pointerOverVerticalTabsSplitter ? CoreCursorType::SizeWestEast : CoreCursorType::Arrow, 0 });
-
-            if (!_verticalTabsPinned && !_pointerOverVerticalTabsPane && !_pointerOverVerticalTabsSplitter)
-            {
-                _verticalTabsExpanded = false;
-                _ApplyVerticalTabPaneState();
-            }
 
             e.Handled(true);
         }
